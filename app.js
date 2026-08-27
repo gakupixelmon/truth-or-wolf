@@ -52,7 +52,7 @@ function header() {
   return `
     <header class="topbar">
       <div class="brand"><div class="brand-mark"><span>∴</span></div><div><div class="brand-name">TRUTH OR WOLF</div><div class="brand-sub">論理人狼</div></div></div>
-      ${game ? `<div class="status-line"><span class="status-dot"></span><span><b>DAY ${game.day}</b></span><span class="hide-mobile">生存 ${game.alivePlayers().length} / 7</span><span class="hide-mobile">発言 ${game.statementsToday} / 3</span></div>` : `<div class="status-line"><span class="status-dot"></span><span>7 PLAYERS · SOLO</span></div>`}
+      ${game ? `<div class="status-line"><span class="status-dot"></span><span><b>DAY ${game.day}</b></span><span class="hide-mobile">生存 ${game.alivePlayers().length} / 7</span><span class="hide-mobile">発言 ${game.statementsToday} / 3</span></div>` : `<div class="status-line"><a class="microcopy" href="./">← 関数版</a><span class="status-dot"></span><span>7 PLAYERS · SOLO</span></div>`}
     </header>`;
 }
 

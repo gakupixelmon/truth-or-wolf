@@ -6,8 +6,12 @@ const port = 4173;
 const files = new Map([
   ["/", ["index.html", "text/html; charset=utf-8"]],
   ["/index.html", ["index.html", "text/html; charset=utf-8"]],
+  ["/classic.html", ["classic.html", "text/html; charset=utf-8"]],
   ["/style.css", ["style.css", "text/css; charset=utf-8"]],
+  ["/function-style.css", ["function-style.css", "text/css; charset=utf-8"]],
   ["/app.js", ["app.js", "text/javascript; charset=utf-8"]],
+  ["/function-app.js", ["function-app.js", "text/javascript; charset=utf-8"]],
+  ["/function-game.js", ["function-game.js", "text/javascript; charset=utf-8"]],
   ["/game.js", ["game.js", "text/javascript; charset=utf-8"]],
   ["/logic.js", ["logic.js", "text/javascript; charset=utf-8"]],
 ]);
