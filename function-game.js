@@ -29,38 +29,34 @@ function makeFunction(id, label, family, evaluate) {
   return { id, label, family, evaluate: (x) => mod(evaluate(mod(x))) };
 }
 
-function makeWolfTransform(rng) {
-  const candidates = [
-    makeFunction("omega-reflect", "Ω(x) = 6 − x (mod 7)", "反転関数", (x) => 6 - x),
-    makeFunction("omega-inverse", "Ω(x) = x⁻¹ (mod 7), Ω(0)=0", "逆元関数", (x) => [0, 1, 4, 5, 2, 3, 6][x]),
-    makeFunction("omega-swap", "Ω = [1, 0, 3, 2, 5, 4, 6]", "置換関数", (x) => [1, 0, 3, 2, 5, 4, 6][x]),
-  ];
-  return candidates[Math.floor(rng() * candidates.length)];
+function functionSignature(fn) {
+  return Array.from({ length: MODULUS }, (_, input) => fn.evaluate(input)).join(",");
 }
 
-function makeFunctionDeck(omega, rng) {
-  const seedPool = [
-    makeFunction("linear-a", "f(x) = x + 1", "一次関数", (x) => x + 1),
-    makeFunction("linear-b", "f(x) = 2x + 3", "一次関数", (x) => 2 * x + 3),
-    makeFunction("quadratic-a", "f(x) = x² + 2", "二次関数", (x) => x * x + 2),
-    makeFunction("quadratic-b", "f(x) = 2x² + x", "二次関数", (x) => 2 * x * x + x),
-    makeFunction("cubic-a", "f(x) = x³ + x", "三次関数", (x) => x * x * x + x),
-    makeFunction("table-a", "f = [0, 2, 5, 1, 6, 3, 4]", "表関数", (x) => [0, 2, 5, 1, 6, 3, 4][x]),
-  ];
-  const seeds = shuffle(seedPool, rng).slice(0, 3);
-  const deck = [];
-  for (const [index, seed] of seeds.entries()) {
-    deck.push({ ...seed, id: `base-${index}` });
-    deck.push(makeFunction(
-      `paired-${index}`,
-      `f(x) = Ω(${seed.label.replace("f(x) = ", "")})`,
-      `合成${seed.family}`,
-      (x) => omega.evaluate(seed.evaluate(x)),
-    ));
+function makeFunctionLibrary() {
+  const functions = [];
+  for (const [a, b] of [[1, 1], [1, 3], [2, 1], [2, 3], [3, 2], [4, 1], [5, 4], [6, 2]]) {
+    functions.push(makeFunction(`linear-${a}-${b}`, `f(x) = ${a === 1 ? "" : `${a}`}x + ${b}`, "一次関数", (x) => a * x + b));
   }
-  const duplicate = deck[0];
-  deck.push(makeFunction("echo", duplicate.label, `重複${duplicate.family}`, (x) => duplicate.evaluate(x)));
-  return shuffle(deck, rng);
+  for (const [a, b, c] of [[1, 0, 1], [1, 1, 2], [2, 0, 3], [2, 1, 0], [3, 2, 1], [4, 1, 2]]) {
+    functions.push(makeFunction(`quadratic-${a}-${b}-${c}`, `f(x) = ${a}x² + ${b}x + ${c}`, "二次関数", (x) => a * x * x + b * x + c));
+  }
+  for (const [a, b] of [[1, 1], [2, 3], [3, 2], [5, 1]]) {
+    functions.push(makeFunction(`cubic-${a}-${b}`, `f(x) = ${a}x³ + ${b}x`, "三次関数", (x) => a * x * x * x + b * x));
+  }
+  const tables = [
+    [0, 2, 5, 1, 6, 3, 4],
+    [3, 0, 4, 6, 1, 5, 2],
+    [1, 4, 0, 5, 2, 6, 3],
+    [6, 2, 0, 4, 1, 3, 5],
+  ];
+  tables.forEach((table, index) => functions.push(makeFunction(
+    `table-${index}`,
+    `f = [${table.join(", ")}]`,
+    "表関数",
+    (x) => table[x],
+  )));
+  return functions;
 }
 
 function makeCondition(index, rng) {
@@ -69,32 +65,77 @@ function makeCondition(index, rng) {
   if (type === "exact") {
     return {
       input,
-      label: `F(${input}) の値を得る`,
-      observe: (value) => ({ key: `=${value}`, display: `F(${input}) = ${value}` }),
+      label: `x = ${input} で合成値を得る`,
+      observe: (value) => ({ key: `=${value}`, display: `合成値 = ${value}` }),
     };
   }
   if (type === "parity") {
     return {
       input,
-      label: `F(${input}) は偶数か`,
-      observe: (value) => ({ key: value % 2 === 0 ? "true" : "false", display: `F(${input}) ∈ {0,2,4,6} は ${value % 2 === 0 ? "⊤" : "⊥"}` }),
+      label: `x = ${input} で合成値は偶数か`,
+      observe: (value) => ({ key: value % 2 === 0 ? "true" : "false", display: `合成値 ∈ {0,2,4,6} は ${value % 2 === 0 ? "⊤" : "⊥"}` }),
     };
   }
   if (type === "threshold") {
     const threshold = 3 + Math.floor(rng() * 3);
     return {
       input,
-      label: `F(${input}) ≥ ${threshold} か`,
-      observe: (value) => ({ key: value >= threshold ? "true" : "false", display: `F(${input}) ≥ ${threshold} は ${value >= threshold ? "⊤" : "⊥"}` }),
+      label: `x = ${input} で合成値 ≥ ${threshold} か`,
+      observe: (value) => ({ key: value >= threshold ? "true" : "false", display: `合成値 ≥ ${threshold} は ${value >= threshold ? "⊤" : "⊥"}` }),
     };
   }
   const residue = Math.floor(rng() * 3);
   const set = [residue, residue + 3, mod(residue + 5)];
   return {
     input,
-    label: `F(${input}) ∈ {${set.join(",")}} か`,
-    observe: (value) => ({ key: set.includes(value) ? "true" : "false", display: `F(${input}) ∈ {${set.join(",")}} は ${set.includes(value) ? "⊤" : "⊥"}` }),
+    label: `x = ${input} で合成値 ∈ {${set.join(",")}} か`,
+    observe: (value) => ({ key: set.includes(value) ? "true" : "false", display: `合成値 ∈ {${set.join(",")}} は ${set.includes(value) ? "⊤" : "⊥"}` }),
   };
+}
+
+function buildBalancedFunctions(wolfIndex, rng) {
+  const library = makeFunctionLibrary();
+  let fallback = null;
+  for (let attempt = 0; attempt < 6000; attempt += 1) {
+    const wolfFunction = library[Math.floor(rng() * library.length)];
+    const wolfSignature = functionSignature(wolfFunction);
+    const uniqueCitizens = [];
+    const seen = new Set([wolfSignature]);
+    for (const candidate of shuffle(library, rng)) {
+      const signature = functionSignature(candidate);
+      if (seen.has(signature)) continue;
+      seen.add(signature);
+      uniqueCitizens.push(candidate);
+    }
+    const citizens = uniqueCitizens.slice(0, 6);
+    const functions = [];
+    let citizenIndex = 0;
+    for (let index = 0; index < 7; index += 1) {
+      functions.push(index === wolfIndex ? wolfFunction : citizens[citizenIndex++]);
+    }
+    const conditions = Array.from({ length: 7 }, (_, index) => makeCondition(index, rng));
+    const matchSets = [];
+    let balanced = new Set(functions.map((_, index) => index));
+    for (let observerIndex = 0; observerIndex < 7; observerIndex += 1) {
+      if (observerIndex === wolfIndex) continue;
+      const ownFunction = functions[observerIndex];
+      const condition = conditions[observerIndex];
+      const wolfKey = condition.observe(ownFunction.evaluate(wolfFunction.evaluate(condition.input))).key;
+      const matches = new Set();
+      for (let targetIndex = 0; targetIndex < 7; targetIndex += 1) {
+        if (targetIndex === observerIndex) continue;
+        const result = ownFunction.evaluate(functions[targetIndex].evaluate(condition.input));
+        if (condition.observe(result).key === wolfKey) matches.add(targetIndex);
+      }
+      matchSets.push(matches);
+      balanced = new Set([...balanced].filter((candidate) => matches.has(candidate)));
+    }
+    const eachAmbiguous = matchSets.every((matches) => matches.has(wolfIndex) && matches.size >= 2 && matches.size <= 4);
+    const familyCount = new Set(functions.map((fn) => fn.family)).size;
+    fallback = { functions, conditions, wolfFunction };
+    if (eachAmbiguous && balanced.size === 1 && balanced.has(wolfIndex) && familyCount >= 3) return fallback;
+  }
+  return fallback;
 }
 
 function maxWithRandomTie(items, score, rng) {
@@ -115,9 +156,9 @@ export class FunctionWolfGame {
     this.rng = rng;
     this.round = 1;
     this.phase = "investigation";
-    this.omega = makeWolfTransform(rng);
-    const functions = makeFunctionDeck(this.omega, rng);
     const wolfIndex = Math.floor(rng() * 7);
+    const setup = buildBalancedFunctions(wolfIndex, rng);
+    this.omega = setup.wolfFunction;
     this.players = FUNCTION_NAMES.map((defaultName, index) => ({
       id: `p${index}`,
       name: index < humanCount ? (humanCount === 1 ? "あなた" : `プレイヤー${index + 1}`) : defaultName,
@@ -125,12 +166,13 @@ export class FunctionWolfGame {
       role: index === wolfIndex ? "wolf" : "citizen",
       infected: false,
       alive: true,
-      baseFunction: functions[index],
-      condition: makeCondition(index, rng),
+      baseFunction: setup.functions[index],
+      condition: setup.conditions[index],
     }));
     this.suspicions = new Map();
     this.reliability = new Map();
     this.publicReports = [];
+    this.investigationHistory = new Map(this.players.map((player) => [player.id, []]));
     this.attackHistory = [];
     this.lastVote = null;
     this.lastAttack = null;
@@ -161,53 +203,60 @@ export class FunctionWolfGame {
   }
 
   isComposed(player) {
-    return player.role === "wolf" || player.infected;
+    return player.infected;
   }
 
   currentValue(player, input) {
     const baseValue = player.baseFunction.evaluate(input);
-    return this.isComposed(player) ? this.omega.evaluate(baseValue) : baseValue;
+    return player.infected ? this.omega.evaluate(baseValue) : baseValue;
   }
 
-  publicFunctionTable(player) {
+  privateFunctionTable(player) {
     return Array.from({ length: MODULUS }, (_, input) => player.baseFunction.evaluate(input));
   }
 
-  composedFunctionTable(player) {
-    return Array.from({ length: MODULUS }, (_, input) => this.omega.evaluate(player.baseFunction.evaluate(input)));
-  }
-
-  collisionPartner(player) {
-    const composed = this.composedFunctionTable(player).join(",");
-    return this.players.find((other) => other.id !== player.id && this.publicFunctionTable(other).join(",") === composed);
+  wolfCandidateSet(observerId) {
+    const observer = this.players.find((player) => player.id === observerId);
+    const condition = observer.condition;
+    const wolfResult = observer.baseFunction.evaluate(this.omega.evaluate(condition.input));
+    const wolfKey = condition.observe(wolfResult).key;
+    return this.players
+      .filter((target) => target.id !== observer.id)
+      .filter((target) => {
+        const result = observer.baseFunction.evaluate(target.baseFunction.evaluate(condition.input));
+        return condition.observe(result).key === wolfKey;
+      })
+      .map((target) => target.id);
   }
 
   investigate(observerId, targetId) {
     const observer = this.players.find((player) => player.id === observerId && player.alive);
     const target = this.players.find((player) => player.id === targetId && player.alive);
     if (!observer || !target || observer.id === target.id) throw new Error("Invalid investigation target");
-    const value = this.currentValue(target, observer.condition.input);
+    const innerValue = this.currentValue(target, observer.condition.input);
+    const value = this.currentValue(observer, innerValue);
     const observed = observer.condition.observe(value);
+    const expectedWolfValue = observer.baseFunction.evaluate(this.omega.evaluate(observer.condition.input));
+    const expectedWolf = observer.condition.observe(expectedWolfValue);
+    const matchesWolf = observed.key === expectedWolf.key;
+    const report = { observer, target, condition: observer.condition, observed, expectedWolf, matchesWolf, truthful: true };
+    this.investigationHistory.get(observer.id).push(report);
     if (!observer.human && observer.role !== "wolf") {
-      this.updateSuspicion(observer.id, target.id, observer.condition, observed, 1);
+      this.updateSuspicion(observer.id, target.id, matchesWolf, 1);
     }
-    return { observer, target, condition: observer.condition, observed, truthful: true };
+    return report;
   }
 
-  updateSuspicion(observerId, targetId, condition, observed, trust = 1) {
+  updateSuspicion(observerId, targetId, matchesWolf, trust = 1) {
     const map = this.suspicions.get(observerId);
     if (!map || targetId === observerId) return;
-    const target = this.players.find((player) => player.id === targetId);
-    const base = condition.observe(target.baseFunction.evaluate(condition.input));
-    const composed = condition.observe(this.omega.evaluate(target.baseFunction.evaluate(condition.input)));
-    if (base.key === composed.key) return;
-    const matchesComposed = observed.key === composed.key;
     const prior = map.get(targetId);
-    const reliability = 0.5 + 0.42 * trust;
-    const likelihoodComposed = matchesComposed ? reliability : 1 - reliability;
-    const likelihoodBase = matchesComposed ? 1 - reliability : reliability;
-    const posterior = (prior * likelihoodComposed) /
-      (prior * likelihoodComposed + (1 - prior) * likelihoodBase);
+    const reliability = 0.5 + 0.38 * trust;
+    const falsePositiveRate = 0.31;
+    const likelihoodWolf = matchesWolf ? reliability : 1 - reliability;
+    const likelihoodCitizen = matchesWolf ? falsePositiveRate : 1 - falsePositiveRate;
+    const posterior = (prior * likelihoodWolf) /
+      (prior * likelihoodWolf + (1 - prior) * likelihoodCitizen);
     map.set(targetId, Math.min(0.995, Math.max(0.005, posterior)));
   }
 
@@ -218,7 +267,7 @@ export class FunctionWolfGame {
     for (const listener of this.players.filter((player) => !player.human && player.alive && player.id !== report.observer.id)) {
       if (listener.role === "wolf") continue;
       const trust = this.reliability.get(listener.id).get(report.observer.id);
-      this.updateSuspicion(listener.id, report.target.id, report.condition, report.observed, trust);
+      this.updateSuspicion(listener.id, report.target.id, report.matchesWolf, trust);
     }
     return publicReport;
   }
@@ -235,9 +284,8 @@ export class FunctionWolfGame {
         }, this.rng);
       const report = this.investigate(observer.id, target.id);
       if (observer.role === "wolf" && this.rng() < 0.72) {
-        const base = observer.condition.observe(target.baseFunction.evaluate(observer.condition.input));
-        report.observed = base;
-        report.truthful = base.key === observer.condition.observe(this.currentValue(target, observer.condition.input)).key;
+        report.matchesWolf = !report.matchesWolf;
+        report.truthful = false;
       }
       if (this.rng() < 0.82) {
         this.publishReport(report, true);

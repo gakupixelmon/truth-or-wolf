@@ -19,17 +19,26 @@ test("function mode supports one to seven local human players", () => {
   }
 });
 
-test("every possible composed function collides with another public function", () => {
-  for (let seed = 1; seed <= 50; seed += 1) {
+test("each citizen test has false positives but all tests together isolate the wolf", () => {
+  for (let seed = 1; seed <= 100; seed += 1) {
     const game = new FunctionWolfGame({ rng: seeded(seed) });
-    for (const player of game.players) {
-      const partner = game.collisionPartner(player);
-      assert.ok(partner, `${player.name} has no collision partner`);
-      for (let input = 0; input < MODULUS; input += 1) {
-        assert.equal(game.omega.evaluate(player.baseFunction.evaluate(input)), partner.baseFunction.evaluate(input));
-      }
+    const candidateSets = game.players
+      .filter((player) => player.role === "citizen")
+      .map((player) => new Set(game.wolfCandidateSet(player.id)));
+    for (const candidates of candidateSets) {
+      assert.ok(candidates.has(game.wolf.id));
+      assert.ok(candidates.size >= 2 && candidates.size <= 4);
     }
+    const intersection = [...candidateSets[0]].filter((candidate) => candidateSets.every((set) => set.has(candidate)));
+    assert.deepEqual(intersection, [game.wolf.id]);
   }
+});
+
+test("the original wolf owns exactly the publicly announced wolf function", () => {
+  const game = new FunctionWolfGame({ rng: seeded(6) });
+  assert.equal(game.wolf.baseFunction.id, game.omega.id);
+  const wolfTable = Array.from({ length: MODULUS }, (_, input) => game.omega.evaluate(input)).join(",");
+  assert.equal(game.players.filter((player) => game.privateFunctionTable(player).join(",") === wolfTable).length, 1);
 });
 
 test("an attacked citizen survives, remains a citizen and secretly becomes composed", () => {
@@ -40,6 +49,19 @@ test("an attacked citizen survives, remains a citizen and secretly becomes compo
   assert.equal(target.role, "citizen");
   assert.equal(target.infected, true);
   assert.equal(game.isComposed(target), true);
+  for (let input = 0; input < MODULUS; input += 1) {
+    assert.equal(game.currentValue(target, input), game.omega.evaluate(target.baseFunction.evaluate(input)));
+  }
+});
+
+test("investigation evaluates the observer function after the nominated function", () => {
+  const game = new FunctionWolfGame({ humanCount: 7, rng: seeded(13) });
+  const observer = game.players.find((player) => player.role === "citizen");
+  const target = game.players.find((player) => player.id !== observer.id);
+  const report = game.investigate(observer.id, target.id);
+  const inner = game.currentValue(target, observer.condition.input);
+  const expectedValue = game.currentValue(observer, inner);
+  assert.equal(report.observed.key, observer.condition.observe(expectedValue).key);
 });
 
 test("the wolf wins when wolf plus attacked citizens exceed half of survivors", () => {
@@ -93,8 +115,8 @@ test("CPU observations update private suspicion without exposing infection", () 
       .map((target) => ({ observer, target })))
     .find(({ observer, target }) => {
       const input = observer.condition.input;
-      const base = observer.condition.observe(target.baseFunction.evaluate(input));
-      const composed = observer.condition.observe(game.omega.evaluate(target.baseFunction.evaluate(input)));
+      const base = observer.condition.observe(observer.baseFunction.evaluate(target.baseFunction.evaluate(input)));
+      const composed = observer.condition.observe(observer.baseFunction.evaluate(game.omega.evaluate(target.baseFunction.evaluate(input))));
       return base.key !== composed.key;
     });
   assert.ok(pair);

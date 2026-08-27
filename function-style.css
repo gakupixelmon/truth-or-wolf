@@ -43,6 +43,11 @@
 .condition-label { color: var(--dim); font-size: 8px; letter-spacing: .15em; }
 .condition-value { margin-top: 7px; font: 16px Georgia, "Yu Mincho", serif; color: var(--gold); }
 .result-value { margin: 17px 0; padding: 18px; text-align: center; border: 1px solid var(--line); font: 20px Georgia, "Yu Mincho", serif; }
+.private-history { margin: 15px 0; padding: 13px; border: 1px solid var(--line-soft); background: #141210; }
+.private-history > div:not(.condition-label) { display: grid; grid-template-columns: 1fr 25px 1.4fr; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--line-soft); font-size: 9px; }
+.private-history > div:last-child { border-bottom: 0; }
+.private-history b { color: var(--gold); }
+.private-history small { color: var(--muted); }
 .action-buttons { display: flex; gap: 8px; justify-content: center; margin-top: 18px; }
 .target-grid.function-targets { max-width: none; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
 .target-button .function-mini { display: block; margin-top: 4px; color: var(--dim); font: 8px Georgia, serif; }
