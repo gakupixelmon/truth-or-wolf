@@ -107,19 +107,26 @@ function buildBalancedFunctions(wolfIndex, rng) {
       const condition = conditions[observerIndex];
       const wolfKey = condition.observe(ownFunction.evaluate(wolfFunction.evaluate(condition.input))).key;
       const matches = new Set();
+      if (wolfKey === "zero") matches.clear(); // Avoid zero as target sign to ensure enough matches
       for (let targetIndex = 0; targetIndex < 7; targetIndex += 1) {
         if (targetIndex === observerIndex) continue;
         const result = ownFunction.evaluate(functions[targetIndex].evaluate(condition.input));
         if (condition.observe(result).key === wolfKey) matches.add(targetIndex);
       }
-      if (wolfKey !== "positive") matches.clear();
       matchSets.push(matches);
       balanced = new Set([...balanced].filter((candidate) => matches.has(candidate)));
     }
     const eachAmbiguous = matchSets.every((matches) => matches.has(wolfIndex) && matches.size >= 2 && matches.size <= 4);
     const familyCount = new Set(functions.map((fn) => fn.family)).size;
-    fallback = { functions, conditions, wolfFunction };
-    if (eachAmbiguous && balanced.size === 1 && balanced.has(wolfIndex) && familyCount >= 3) return fallback;
+    if (eachAmbiguous && balanced.size === 1 && balanced.has(wolfIndex) && familyCount >= 3) {
+      for (let observerIndex = 0; observerIndex < 7; observerIndex += 1) {
+        const ownFunction = functions[observerIndex];
+        const condition = conditions[observerIndex];
+        condition.targetSign = condition.observe(ownFunction.evaluate(wolfFunction.evaluate(condition.input))).key;
+      }
+      fallback = { functions, conditions, wolfFunction };
+      return fallback;
+    }
   }
   return fallback;
 }
@@ -208,7 +215,7 @@ export class FunctionWolfGame {
       .filter((target) => target.id !== observer.id)
       .filter((target) => {
         const result = observer.baseFunction.evaluate(target.baseFunction.evaluate(condition.input));
-        return condition.observe(result).key === "positive";
+        return condition.observe(result).key === condition.targetSign;
       })
       .map((target) => target.id);
   }
@@ -220,19 +227,19 @@ export class FunctionWolfGame {
     const innerValue = this.currentValue(target, observer.condition.input);
     const value = this.currentValue(observer, innerValue);
     const observed = observer.condition.observe(value);
-    const positive = observed.key === "positive";
+    const isMatch = observed.key === observer.condition.targetSign;
     const report = {
       observer,
       target,
       condition: observer.condition,
       observed,
-      positive,
+      isMatch,
       reportedSign: observed.symbol,
       truthful: true,
     };
     this.investigationHistory.get(observer.id).push(report);
     if (!observer.human && observer.role !== "wolf") {
-      this.updateSuspicion(observer.id, target.id, positive, 1);
+      this.updateSuspicion(observer.id, target.id, isMatch, 1);
     }
     return report;
   }
@@ -257,7 +264,7 @@ export class FunctionWolfGame {
     for (const listener of this.players.filter((player) => !player.human && player.alive && player.id !== report.observer.id)) {
       if (listener.role === "wolf") continue;
       const trust = this.reliability.get(listener.id).get(report.observer.id);
-      this.updateSuspicion(listener.id, report.target.id, report.positive, trust);
+      this.updateSuspicion(listener.id, report.target.id, report.isMatch, trust);
     }
     return publicReport;
   }
@@ -274,8 +281,10 @@ export class FunctionWolfGame {
         }, this.rng);
       const report = this.investigate(observer.id, target.id);
       if (observer.role === "wolf" && this.rng() < 0.72) {
-        report.positive = !report.positive;
-        report.reportedSign = report.positive ? "+" : "−";
+        report.isMatch = !report.isMatch;
+        const expectedSymbol = observer.condition.targetSign === "positive" ? "+" : "−";
+        const unexpectedSymbol = observer.condition.targetSign === "positive" ? "−" : "+";
+        report.reportedSign = report.isMatch ? expectedSymbol : unexpectedSymbol;
         report.truthful = false;
       }
       if (this.rng() < 0.82) {

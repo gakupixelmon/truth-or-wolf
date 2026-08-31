@@ -49,7 +49,7 @@ function reportsMarkup() {
 }
 
 function publicDiscussion() {
-  return `<div class="round-intro"><div class="panel-kicker">Shared observations</div><h2>符号の公開</h2><p>各人の秘密関数や演算値は公開されません。正の結果だけでは、市民による偽陽性と区別できません。</p></div>${reportsMarkup()}<div class="action-buttons"><button class="primary-button" id="start-vote">追放投票へ</button></div>`;
+  return `<div class="round-intro"><div class="panel-kicker">Shared observations</div><h2>符号の公開</h2><p>各人の秘密関数や目標符号は公開されません。公開された符号がその人の目標符号と一致していても、市民による偽陽性の可能性があります。</p></div>${reportsMarkup()}<div class="action-buttons"><button class="primary-button" id="start-vote">追放投票へ</button></div>`;
 }
 
 function investigationAction() {
@@ -58,12 +58,14 @@ function investigationAction() {
   const ownTable = game.privateFunctionTable(actor).join(" ");
   const history = game.investigationHistory.get(actor.id);
   const historyMarkup = history.length ? `<div class="private-history"><div class="condition-label">YOUR PAST RESULTS</div>${history.map((report) => `<div><span>${report.target.name}</span><b>${report.observed.symbol}</b><small>${report.observed.display}</small></div>`).join("")}</div>` : "";
-  return `<div class="action-card"><span class="private-role">${actor.role === "wolf" ? "元の人狼" : "市民"}</span><h3>${actor.name}の秘密観測</h3><p>自分の関数を外側、指名相手の関数を内側として F<sub>self</sub> ∘ F<sub>target</sub> を観測します。元人狼なら結果は必ず正ですが、市民でも正になる場合があります。</p><div class="condition-box"><div class="condition-label">YOUR PRIVATE FUNCTION</div><div class="condition-value">${actor.baseFunction.label}</div><div class="function-vector">[ ${ownTable} ]</div></div><div class="condition-box"><div class="condition-label">YOUR TEST</div><div class="condition-value">${actor.condition.label}</div></div>${historyMarkup}<div class="target-grid function-targets">${game.alivePlayers().filter((player) => player.id !== actor.id).map((player) => `<button class="target-button" data-investigate="${player.id}">${player.name}<span class="function-mini">F${player.id.slice(1)}(x) = ?</span></button>`).join("")}</div></div>`;
+  const targetSignText = actor.condition.targetSign === "positive" ? "正" : "負";
+  return `<div class="action-card"><span class="private-role">${actor.role === "wolf" ? "元の人狼" : "市民"}</span><h3>${actor.name}の秘密観測</h3><p>自分の関数を外側、指名相手の関数を内側として F<sub>self</sub> ∘ F<sub>target</sub> を観測します。元人狼なら結果は必ず${targetSignText}になりますが、市民でも${targetSignText}になる場合があります。</p><div class="condition-box"><div class="condition-label">YOUR PRIVATE FUNCTION</div><div class="condition-value">${actor.baseFunction.label}</div><div class="function-vector">[ ${ownTable} ]</div></div><div class="condition-box"><div class="condition-label">YOUR TEST</div><div class="condition-value">${actor.condition.label}</div></div>${historyMarkup}<div class="target-grid function-targets">${game.alivePlayers().filter((player) => player.id !== actor.id).map((player) => `<button class="target-button" data-investigate="${player.id}">${player.name}<span class="function-mini">F${player.id.slice(1)}(x) = ?</span></button>`).join("")}</div></div>`;
 }
 
 function observationResult() {
   const report = state.observation;
-  return `<div class="action-card"><span class="private-role">PRIVATE RESULT</span><h3>${report.target.name}の合成演算</h3><p>正なら元人狼の可能性がありますが、この一件だけでは偽陽性と区別できません。公開されるのは符号だけです。</p><div class="condition-box"><div class="condition-label">Fself ∘ Ftarget</div><div class="condition-value">${report.condition.label}</div></div><div class="result-value">${report.observed.display}</div><div class="action-buttons"><button class="primary-button" data-publish="yes">符号を公開する</button>${report.observer.role === "wolf" ? `<button class="danger-button" data-publish="lie">逆の符号を公開</button>` : ""}<button class="secondary-button" data-publish="no">結果を伏せる</button></div></div>`;
+  const targetSignText = report.condition.targetSign === "positive" ? "正" : "負";
+  return `<div class="action-card"><span class="private-role">PRIVATE RESULT</span><h3>${report.target.name}の合成演算</h3><p>${targetSignText}なら元人狼の可能性がありますが、この一件だけでは偽陽性と区別できません。公開されるのは符号だけです。</p><div class="condition-box"><div class="condition-label">Fself ∘ Ftarget</div><div class="condition-value">${report.condition.label}</div></div><div class="result-value">${report.observed.display}</div><div class="action-buttons"><button class="primary-button" data-publish="yes">符号を公開する</button>${report.observer.role === "wolf" ? `<button class="danger-button" data-publish="lie">逆の符号を公開</button>` : ""}<button class="secondary-button" data-publish="no">結果を伏せる</button></div></div>`;
 }
 
 function voteAction() {
@@ -224,8 +226,11 @@ function bindEvents() {
   document.querySelectorAll("[data-publish]").forEach((button) => button.addEventListener("click", () => {
     const mode = button.dataset.publish;
     if (mode === "lie") {
-      const positive = !state.observation.positive;
-      state.game.publishReport({ ...state.observation, positive, reportedSign: positive ? "+" : "−", truthful: false }, true);
+      const isMatch = !state.observation.isMatch;
+      const expectedSymbol = state.observation.condition.targetSign === "positive" ? "+" : "−";
+      const unexpectedSymbol = state.observation.condition.targetSign === "positive" ? "−" : "+";
+      const reportedSign = isMatch ? expectedSymbol : unexpectedSymbol;
+      state.game.publishReport({ ...state.observation, isMatch, reportedSign, truthful: false }, true);
     } else {
       state.game.publishReport(state.observation, mode === "yes");
     }
