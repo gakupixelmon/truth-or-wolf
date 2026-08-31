@@ -59,22 +59,37 @@ function makeFunctionLibrary() {
   return functions;
 }
 
-function signedValue(value) {
-  const residue = mod(value);
-  return residue <= 3 ? residue : residue - MODULUS;
-}
-
-function makeCondition(_index, rng) {
+function makeCondition(index, rng) {
   const input = Math.floor(rng() * MODULUS);
+  const type = ["exact", "parity", "threshold", "set"][index % 4];
+  if (type === "exact") {
+    return {
+      input,
+      label: `x = ${input} で合成値を得る`,
+      observe: (value) => ({ key: `=${value}`, display: `合成値 = ${value}` }),
+    };
+  }
+  if (type === "parity") {
+    return {
+      input,
+      label: `x = ${input} で合成値は偶数か`,
+      observe: (value) => ({ key: value % 2 === 0 ? "true" : "false", display: `合成値 ∈ {0,2,4,6} は ${value % 2 === 0 ? "⊤" : "⊥"}` }),
+    };
+  }
+  if (type === "threshold") {
+    const threshold = 3 + Math.floor(rng() * 3);
+    return {
+      input,
+      label: `x = ${input} で合成値 ≥ ${threshold} か`,
+      observe: (value) => ({ key: value >= threshold ? "true" : "false", display: `合成値 ≥ ${threshold} は ${value >= threshold ? "⊤" : "⊥"}` }),
+    };
+  }
+  const residue = Math.floor(rng() * 3);
+  const set = [residue, residue + 3, mod(residue + 5)];
   return {
     input,
-    label: `x = ${input} で合成値の符号を見る`,
-    observe: (value) => {
-      const signed = signedValue(value);
-      const key = signed > 0 ? "positive" : signed < 0 ? "negative" : "zero";
-      const symbol = signed > 0 ? "+" : signed < 0 ? "−" : "0";
-      return { key, symbol, display: `sgn = ${symbol}` };
-    },
+    label: `x = ${input} で合成値 ∈ {${set.join(",")}} か`,
+    observe: (value) => ({ key: set.includes(value) ? "true" : "false", display: `合成値 ∈ {${set.join(",")}} は ${set.includes(value) ? "⊤" : "⊥"}` }),
   };
 }
 
@@ -112,7 +127,6 @@ function buildBalancedFunctions(wolfIndex, rng) {
         const result = ownFunction.evaluate(functions[targetIndex].evaluate(condition.input));
         if (condition.observe(result).key === wolfKey) matches.add(targetIndex);
       }
-      if (wolfKey !== "positive") matches.clear();
       matchSets.push(matches);
       balanced = new Set([...balanced].filter((candidate) => matches.has(candidate)));
     }
@@ -204,11 +218,13 @@ export class FunctionWolfGame {
   wolfCandidateSet(observerId) {
     const observer = this.players.find((player) => player.id === observerId);
     const condition = observer.condition;
+    const wolfResult = observer.baseFunction.evaluate(this.omega.evaluate(condition.input));
+    const wolfKey = condition.observe(wolfResult).key;
     return this.players
       .filter((target) => target.id !== observer.id)
       .filter((target) => {
         const result = observer.baseFunction.evaluate(target.baseFunction.evaluate(condition.input));
-        return condition.observe(result).key === "positive";
+        return condition.observe(result).key === wolfKey;
       })
       .map((target) => target.id);
   }
@@ -220,31 +236,25 @@ export class FunctionWolfGame {
     const innerValue = this.currentValue(target, observer.condition.input);
     const value = this.currentValue(observer, innerValue);
     const observed = observer.condition.observe(value);
-    const positive = observed.key === "positive";
-    const report = {
-      observer,
-      target,
-      condition: observer.condition,
-      observed,
-      positive,
-      reportedSign: observed.symbol,
-      truthful: true,
-    };
+    const expectedWolfValue = observer.baseFunction.evaluate(this.omega.evaluate(observer.condition.input));
+    const expectedWolf = observer.condition.observe(expectedWolfValue);
+    const matchesWolf = observed.key === expectedWolf.key;
+    const report = { observer, target, condition: observer.condition, observed, expectedWolf, matchesWolf, truthful: true };
     this.investigationHistory.get(observer.id).push(report);
     if (!observer.human && observer.role !== "wolf") {
-      this.updateSuspicion(observer.id, target.id, positive, 1);
+      this.updateSuspicion(observer.id, target.id, matchesWolf, 1);
     }
     return report;
   }
 
-  updateSuspicion(observerId, targetId, positive, trust = 1) {
+  updateSuspicion(observerId, targetId, matchesWolf, trust = 1) {
     const map = this.suspicions.get(observerId);
     if (!map || targetId === observerId) return;
     const prior = map.get(targetId);
     const reliability = 0.5 + 0.38 * trust;
     const falsePositiveRate = 0.31;
-    const likelihoodWolf = positive ? reliability : 1 - reliability;
-    const likelihoodCitizen = positive ? falsePositiveRate : 1 - falsePositiveRate;
+    const likelihoodWolf = matchesWolf ? reliability : 1 - reliability;
+    const likelihoodCitizen = matchesWolf ? falsePositiveRate : 1 - falsePositiveRate;
     const posterior = (prior * likelihoodWolf) /
       (prior * likelihoodWolf + (1 - prior) * likelihoodCitizen);
     map.set(targetId, Math.min(0.995, Math.max(0.005, posterior)));
@@ -257,7 +267,7 @@ export class FunctionWolfGame {
     for (const listener of this.players.filter((player) => !player.human && player.alive && player.id !== report.observer.id)) {
       if (listener.role === "wolf") continue;
       const trust = this.reliability.get(listener.id).get(report.observer.id);
-      this.updateSuspicion(listener.id, report.target.id, report.positive, trust);
+      this.updateSuspicion(listener.id, report.target.id, report.matchesWolf, trust);
     }
     return publicReport;
   }
@@ -274,8 +284,7 @@ export class FunctionWolfGame {
         }, this.rng);
       const report = this.investigate(observer.id, target.id);
       if (observer.role === "wolf" && this.rng() < 0.72) {
-        report.positive = !report.positive;
-        report.reportedSign = report.positive ? "+" : "−";
+        report.matchesWolf = !report.matchesWolf;
         report.truthful = false;
       }
       if (this.rng() < 0.82) {
