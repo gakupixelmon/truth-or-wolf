@@ -34,6 +34,17 @@ test("each citizen test has false positives but all tests together isolate the w
   }
 });
 
+test("every citizen obtains a positive sign when testing the original wolf", () => {
+  for (let seed = 1; seed <= 40; seed += 1) {
+    const game = new FunctionWolfGame({ humanCount: 7, rng: seeded(seed) });
+    for (const citizen of game.players.filter((player) => player.role === "citizen")) {
+      const report = game.investigate(citizen.id, game.wolf.id);
+      assert.equal(report.observed.key, "positive");
+      assert.equal(report.reportedSign, "+");
+    }
+  }
+});
+
 test("the original wolf owns exactly the publicly announced wolf function", () => {
   const game = new FunctionWolfGame({ rng: seeded(6) });
   assert.equal(game.wolf.baseFunction.id, game.omega.id);
