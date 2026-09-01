@@ -1,6 +1,8 @@
 import { atom, binary, explainFormula, formatFormula, not, ROLE_META } from "./logic.js";
 import { TruthOrWolfGame } from "./game.js";
 
+const socket = io();
+
 const app = document.querySelector("#app");
 
 const state = {
@@ -192,11 +194,29 @@ function centerColumn() {
 
 function rightColumn() {
   const game = state.game;
+
+  const chatListHtml = state.chatLogs.map(data => 
+    `<li style="margin-bottom: 5px;">[${data.time}] ${data.sender.substring(0, 5)}: ${data.message}</li>`
+  ).join("");
+
   return `<aside class="right-column">
+    <!-- 既存の発言台帳パネル -->
     <section class="panel"><div class="panel-head"><div class="panel-kicker">Your propositions</div><div class="panel-title">発言台帳</div></div><div class="notebook">
       ${game.playerHistory.length ? game.playerHistory.map((formula, i) => `<div class="history-item"><div class="history-index">STATEMENT ${String(i + 1).padStart(2, "0")}</div><div class="history-formula">${formatFormula(formula, game.players)}</div></div>`).join("") : `<div class="empty-state">まだ命題を発言していません。<br>発言はすべてここに記録されます。</div>`}
     </div></section>
+    
+    <!-- 既存のVillage axiomsパネル -->
     <section class="panel axioms"><div class="panel-kicker">Village axioms</div><div class="axiom-row"><span>各人の役職</span><code>exactly 1</code></div><div class="axiom-row"><span>人狼</span><code>ΣW = 1</code></div><div class="axiom-row"><span>占い師</span><code>ΣS = 1</code></div><div class="axiom-row"><span>狩人</span><code>ΣG = 1</code></div><div class="axiom-row"><span>CPU信念</span><code>Pᵢ(role | evidence)</code></div></section>
+
+    <!-- ★追加: チャットパネル -->
+    <section class="panel chat-panel" id="chat-container">
+      <div class="panel-head"><div class="panel-title">チャット</div></div>
+      <ul id="messages" style="list-style-type: none; margin: 0; padding: 10px; height: 150px; overflow-y: scroll; background: #f9f9f9; font-size: 13px;"></ul>
+      <form id="chat-form" style="display: flex; padding: 10px; border-top: 1px solid #ddd;">
+        <input id="chat-input" autocomplete="off" style="flex-grow: 1; padding: 5px;" placeholder="メッセージを入力..." />
+        <button type="submit" style="padding: 5px 10px; margin-left: 5px;">送信</button>
+      </form>
+    </section>
   </aside>`;
 }
 
@@ -221,6 +241,8 @@ function render() {
   requestAnimationFrame(() => {
     const log = document.querySelector("#discussion-log");
     if (log) log.scrollTop = log.scrollHeight;
+    const chatMessages = document.querySelector("#messages");
+    if (chatMessages) chatMessages.scrollTop = chatMessages.scrollHeight;
   });
 }
 
@@ -294,6 +316,30 @@ function bindEvents() {
     state.nightResult = null; state.voteResult = null;
     addCpuDiscussion(); render();
   });
+  const chatForm = document.querySelector("#chat-form");
+  const chatInput = document.querySelector("#chat-input");
+  
+  if (chatForm && chatInput) {
+    chatForm.addEventListener("submit", (e) => {
+      e.preventDefault(); // 画面の再読み込みを防ぐ
+      const message = chatInput.value.trim();
+      
+      if (message) {
+        // サーバーへメッセージを送信
+        socket.emit("chat message", { message: message });
+      }
+    });
+  }
 }
+
+// ★追加: サーバーからメッセージを受信したときの処理
+socket.on("chat message", (data) => {
+  // 受信したメッセージを履歴に追加
+  state.chatLogs.push(data);
+  // 画面を再描画してチャットを反映させる
+  render();
+});
+
+render(); // (既存のコード)
 
 render();
