@@ -8,6 +8,7 @@ const app = document.querySelector("#app");
 const state = {
   game: null,
   logs: [],
+  chatLogs: [],
   template: "atom",
   leftRole: "wolf",
   leftPlayer: "p1",
@@ -196,7 +197,7 @@ function rightColumn() {
   const game = state.game;
 
   const chatListHtml = state.chatLogs.map(data => 
-    `<li style="margin-bottom: 5px;">[${data.time}] ${data.sender.substring(0, 5)}: ${data.message}</li>`
+    `<li style="margin-bottom: 5px; color:#333;">[${data.time}] ${data.sender.substring(0, 5)}: ${data.message}</li>`
   ).join("");
 
   return `<aside class="right-column">
@@ -211,7 +212,7 @@ function rightColumn() {
     <!-- ★追加: チャットパネル -->
     <section class="panel chat-panel" id="chat-container">
       <div class="panel-head"><div class="panel-title">チャット</div></div>
-      <ul id="messages" style="list-style-type: none; margin: 0; padding: 10px; height: 150px; overflow-y: scroll; background: #f9f9f9; font-size: 13px;"></ul>
+      <ul id="messages" style="list-style-type: none; margin: 0; padding: 10px; height: 150px; overflow-y: scroll; background: #f9f9f9; font-size: 13px;"> ${chatListHtml} </ul>
       <form id="chat-form" style="display: flex; padding: 10px; border-top: 1px solid #ddd;">
         <input id="chat-input" autocomplete="off" style="flex-grow: 1; padding: 5px;" placeholder="メッセージを入力..." />
         <button type="submit" style="padding: 5px 10px; margin-left: 5px;">送信</button>
@@ -327,6 +328,7 @@ function bindEvents() {
       if (message) {
         // サーバーへメッセージを送信
         socket.emit("chat message", { message: message });
+        chatInput.value = "";
       }
     });
   }
@@ -342,4 +344,3 @@ socket.on("chat message", (data) => {
 
 render(); // (既存のコード)
 
-render();
