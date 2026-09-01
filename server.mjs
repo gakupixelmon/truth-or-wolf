@@ -1,5 +1,6 @@
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
+import { Server } from "socket.io"; // ★追加: Socket.IOをインポート
 
 const host = "127.0.0.1";
 const port = 4173;
@@ -16,6 +17,7 @@ const files = new Map([
   ["/logic.js", ["logic.js", "text/javascript; charset=utf-8"]],
 ]);
 
+// 既存のHTTPサーバー作成処理
 const server = createServer(async (request, response) => {
   const pathname = new URL(request.url, `http://${host}:${port}`).pathname;
   const file = files.get(pathname);
@@ -37,6 +39,28 @@ const server = createServer(async (request, response) => {
     response.writeHead(500, { "Content-Type": "text/plain; charset=utf-8" });
     response.end("Unable to load application file");
   }
+});
+
+// ★追加: サーバーインスタンスにSocket.IOを紐付け
+const io = new Server(server);
+
+// ★追加: クライアントとのWebSocket接続時の処理
+io.on("connection", (socket) => {
+  console.log("ユーザーが接続しました:", socket.id);
+
+  // クライアントから 'chat message' というイベントを受け取った時
+  socket.on("chat message", (data) => {
+    // 接続している全員（送信者含む）にメッセージをブロードキャストする
+    io.emit("chat message", {
+      sender: socket.id, // 一旦Socket IDを送信者名として使用します
+      message: data.message,
+      time: new Date().toLocaleTimeString("ja-JP"),
+    });
+  });
+
+  socket.on("disconnect", () => {
+    console.log("ユーザーが切断しました:", socket.id);
+  });
 });
 
 server.listen(port, host, () => {
