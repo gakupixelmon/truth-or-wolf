@@ -39,10 +39,15 @@ function makeFunctionLibrary() {
     functions.push(makeFunction(`linear-${a}-${b}`, `f(x) = ${a === 1 ? "" : `${a}`}x + ${b}`, "一次関数", (x) => a * x + b));
   }
   for (const [a, b, c] of [[1, 0, 1], [1, 1, 2], [2, 0, 3], [2, 1, 0], [3, 2, 1], [4, 1, 2]]) {
-    functions.push(makeFunction(`quadratic-${a}-${b}-${c}`, `f(x) = ${a}x² + ${b}x + ${c}`, "二次関数", (x) => a * x * x + b * x + c));
+    const aStr = a === 1 ? "x²" : `${a}x²`;
+    const bStr = b === 0 ? "" : (b === 1 ? " + x" : ` + ${b}x`);
+    const cStr = c === 0 ? "" : ` + ${c}`;
+    functions.push(makeFunction(`quadratic-${a}-${b}-${c}`, `f(x) = ${aStr}${bStr}${cStr}`, "二次関数", (x) => a * x * x + b * x + c));
   }
   for (const [a, b] of [[1, 1], [2, 3], [3, 2], [5, 1]]) {
-    functions.push(makeFunction(`cubic-${a}-${b}`, `f(x) = ${a}x³ + ${b}x`, "三次関数", (x) => a * x * x * x + b * x));
+    const aStr = a === 1 ? "x³" : `${a}x³`;
+    const bStr = b === 1 ? " + x" : ` + ${b}x`;
+    functions.push(makeFunction(`cubic-${a}-${b}`, `f(x) = ${aStr}${bStr}`, "三次関数", (x) => a * x * x * x + b * x));
   }
   const tables = [
     [0, 2, 5, 1, 6, 3, 4],
@@ -390,3 +395,4 @@ export class FunctionWolfGame {
     this.lastAttack = null;
   }
 }
+
