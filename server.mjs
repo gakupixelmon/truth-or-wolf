@@ -1,9 +1,11 @@
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
-import { Server } from "socket.io"; // ★追加: Socket.IOをインポート
+import { randomInt } from "node:crypto";
+import { Server } from "socket.io";
+import { FunctionWolfGame } from "./function-game.js";
 
-const host = "127.0.0.1";
-const port = 4173;
+const host = process.env.HOST || "0.0.0.0";
+const port = Number(process.env.PORT || 4173);
 const files = new Map([
   ["/", ["index.html", "text/html; charset=utf-8"]],
   ["/index.html", ["index.html", "text/html; charset=utf-8"]],
@@ -17,7 +19,6 @@ const files = new Map([
   ["/logic.js", ["logic.js", "text/javascript; charset=utf-8"]],
 ]);
 
-// 既存のHTTPサーバー作成処理
 const server = createServer(async (request, response) => {
   const pathname = new URL(request.url, `http://${host}:${port}`).pathname;
   const file = files.get(pathname);
@@ -41,28 +42,455 @@ const server = createServer(async (request, response) => {
   }
 });
 
-// ★追加: サーバーインスタンスにSocket.IOを紐付け
 const io = new Server(server);
+const rooms = new Map();
 
-// ★追加: クライアントとのWebSocket接続時の処理
+function cleanText(value, fallback = "") {
+  return String(value ?? fallback).trim().slice(0, 24);
+}
+
+function makeRoomCode() {
+  let code;
+  do {
+    code = String(randomInt(0, 1000000)).padStart(6, "0");
+  } while (rooms.has(code));
+  return code;
+}
+
+function getRoom(socket) {
+  return socket.data.roomCode ? rooms.get(socket.data.roomCode) : null;
+}
+
+function getMember(room, socketId) {
+  return room?.members.find((member) => member.socketId === socketId) ?? null;
+}
+
+function getPlayer(room, playerId) {
+  return room?.game?.players.find((player) => player.id === playerId) ?? null;
+}
+
+function publicPlayers(room) {
+  return room.game.players.map((player) => ({
+    id: player.id,
+    name: player.name,
+    alive: player.alive,
+    human: player.human,
+  }));
+}
+
+function publicReports(room) {
+  return room.game.publicReports.map((report) => ({
+    round: report.round,
+    observerId: report.observer.id,
+    observerName: report.observer.name,
+    targetId: report.target.id,
+    targetName: report.target.name,
+    reportedSign: report.reportedSign,
+  }));
+}
+
+function publicVoteResult(room) {
+  const result = room.game.lastVote;
+  if (!result) return null;
+  return {
+    votes: result.votes,
+    tally: Object.fromEntries(result.tally),
+    exiled: result.exiled ? {
+      id: result.exiled.id,
+      name: result.exiled.name,
+      role: result.exiled.role,
+    } : null,
+  };
+}
+
+function gameState(room, socketId) {
+  const game = room.game;
+  const member = getMember(room, socketId);
+  const activePlayer = game && room.activePlayerId ? getPlayer(room, room.activePlayerId) : null;
+  return {
+    roomCode: room.code,
+    phase: room.phase,
+    round: game.round,
+    omegaLabel: game.omega.label,
+    players: publicPlayers(room),
+    reports: publicReports(room),
+    outcome: game.outcome,
+    reveal: game.outcome ? game.players.map((player) => ({
+      id: player.id,
+      name: player.name,
+      role: player.role,
+      infected: player.infected,
+      functionLabel: player.baseFunction.label,
+    })) : null,
+    voteResult: room.phase === "vote-result" || room.phase === "ended" ? publicVoteResult(room) : null,
+    activePlayerId: room.activePlayerId,
+    activePlayerName: activePlayer?.name ?? null,
+    myPlayerId: member?.playerId ?? null,
+    isHost: member?.socketId === room.hostSocketId,
+  };
+}
+
+function roomState(room, socketId) {
+  const member = getMember(room, socketId);
+  return {
+    code: room.code,
+    status: room.game ? "playing" : "lobby",
+    isHost: member?.socketId === room.hostSocketId,
+    players: room.members.map((entry) => ({
+      name: entry.name,
+      connected: Boolean(io.sockets.sockets.get(entry.socketId)),
+      isHost: entry.socketId === room.hostSocketId,
+    })),
+  };
+}
+
+function sendRoomState(room) {
+  for (const member of room.members) {
+    io.to(member.socketId).emit("room:update", roomState(room, member.socketId));
+  }
+}
+
+function sendGameState(room) {
+  if (!room.game) return;
+  for (const member of room.members) {
+    io.to(member.socketId).emit("game:state", gameState(room, member.socketId));
+  }
+}
+
+function sendError(socket, message) {
+  socket.emit("room:error", { message });
+}
+
+function privatePlayerData(room, playerId) {
+  const player = getPlayer(room, playerId);
+  if (!player) return null;
+  return {
+    playerId: player.id,
+    name: player.name,
+    role: player.role,
+    function: {
+      label: player.baseFunction.label,
+      table: room.game.privateFunctionTable(player),
+    },
+    condition: {
+      label: player.condition.label,
+      targetSign: player.condition.targetSign,
+    },
+  };
+}
+
+function sendInvestigationTurn(room) {
+  const player = getPlayer(room, room.activePlayerId);
+  const member = room.members.find((entry) => entry.playerId === player?.id);
+  if (!player || !member) return;
+  io.to(member.socketId).emit("game:private", {
+    kind: "investigation",
+    ...privatePlayerData(room, player.id),
+    targets: room.game.alivePlayers()
+      .filter((target) => target.id !== player.id)
+      .map((target) => ({ id: target.id, name: target.name })),
+  });
+}
+
+function sendVoteTurn(room) {
+  const player = getPlayer(room, room.activePlayerId);
+  const member = room.members.find((entry) => entry.playerId === player?.id);
+  if (!player || !member) return;
+  io.to(member.socketId).emit("game:private", {
+    kind: "vote",
+    playerId: player.id,
+    name: player.name,
+    role: player.role,
+    targets: room.game.alivePlayers()
+      .filter((target) => target.id !== player.id)
+      .map((target) => ({ id: target.id, name: target.name })),
+  });
+}
+
+function sendNightTurn(room) {
+  const player = room.game.wolf;
+  const member = room.members.find((entry) => entry.playerId === player?.id);
+  if (!player || !member) return;
+  io.to(member.socketId).emit("game:private", {
+    kind: "night",
+    playerId: player.id,
+    name: player.name,
+    role: player.role,
+    targets: room.game.alivePlayers()
+      .filter((target) => target.role !== "wolf" && !target.infected)
+      .map((target) => ({ id: target.id, name: target.name })),
+  });
+}
+
+function beginInvestigation(room) {
+  room.phase = "investigation";
+  room.investigationQueue = room.game.getHumanActors().map((player) => player.id);
+  room.investigationIndex = 0;
+  room.activePlayerId = room.investigationQueue[0] ?? null;
+  room.pendingObservation = null;
+  if (room.activePlayerId) {
+    sendGameState(room);
+    sendInvestigationTurn(room);
+    return;
+  }
+  room.game.runCpuInvestigations();
+  room.phase = "discussion";
+  room.activePlayerId = null;
+  sendGameState(room);
+}
+
+function finishInvestigation(room) {
+  room.game.runCpuInvestigations();
+  room.phase = "discussion";
+  room.activePlayerId = null;
+  room.pendingObservation = null;
+  sendGameState(room);
+}
+
+function nextInvestigation(room) {
+  room.investigationIndex += 1;
+  if (room.investigationIndex >= room.investigationQueue.length) {
+    finishInvestigation(room);
+    return;
+  }
+  room.activePlayerId = room.investigationQueue[room.investigationIndex];
+  sendGameState(room);
+  sendInvestigationTurn(room);
+}
+
+function beginVote(room) {
+  room.phase = "vote";
+  room.voteQueue = room.game.getHumanActors().map((player) => player.id);
+  room.voteIndex = 0;
+  room.humanVotes = new Map();
+  room.activePlayerId = room.voteQueue[0] ?? null;
+  if (room.activePlayerId) {
+    sendGameState(room);
+    sendVoteTurn(room);
+    return;
+  }
+  finishVote(room);
+}
+
+function finishVote(room) {
+  room.game.resolveVotes(room.humanVotes);
+  room.activePlayerId = null;
+  room.phase = room.game.outcome ? "ended" : "vote-result";
+  sendGameState(room);
+}
+
+function nextVote(room) {
+  room.voteIndex += 1;
+  if (room.voteIndex >= room.voteQueue.length) {
+    finishVote(room);
+    return;
+  }
+  room.activePlayerId = room.voteQueue[room.voteIndex];
+  sendGameState(room);
+  sendVoteTurn(room);
+}
+
+function beginNight(room) {
+  if (room.game.outcome) return;
+  room.phase = "night";
+  const wolf = room.game.wolf;
+  if (wolf.human && wolf.alive) {
+    room.activePlayerId = wolf.id;
+    sendGameState(room);
+    sendNightTurn(room);
+    return;
+  }
+  room.game.resolveNight();
+  room.phase = room.game.outcome ? "ended" : "night-result";
+  room.activePlayerId = null;
+  sendGameState(room);
+}
+
+function finishNight(room, targetId) {
+  room.game.resolveNight(targetId);
+  room.phase = room.game.outcome ? "ended" : "night-result";
+  room.activePlayerId = null;
+  sendGameState(room);
+}
+
+function memberCanAct(room, socket, expectedPhase) {
+  const member = getMember(room, socket.id);
+  return Boolean(room?.game && room.phase === expectedPhase && member && member.playerId === room.activePlayerId);
+}
+
+function clearRoomIfEmpty(room) {
+  if (room.members.length === 0) rooms.delete(room.code);
+}
+
+function removeMember(room, socketId) {
+  room.members = room.members.filter((member) => member.socketId !== socketId);
+  if (room.hostSocketId === socketId) room.hostSocketId = room.members[0]?.socketId ?? null;
+  if (room.game && room.members.length) {
+    room.game.outcome = {
+      winner: "citizen",
+      reason: "プレイヤーが退出したため、このゲームは終了しました。",
+    };
+    room.phase = "ended";
+    room.activePlayerId = null;
+    sendGameState(room);
+  }
+  clearRoomIfEmpty(room);
+  if (room.members.length) sendRoomState(room);
+}
+
 io.on("connection", (socket) => {
-  console.log("ユーザーが接続しました:", socket.id);
+  socket.on("room:create", ({ name, password } = {}) => {
+    if (getRoom(socket)) return sendError(socket, "すでに部屋に参加しています。");
+    const playerName = cleanText(name, "プレイヤー");
+    const room = {
+      code: makeRoomCode(),
+      password: String(password ?? "").slice(0, 64),
+      hostSocketId: socket.id,
+      members: [{ socketId: socket.id, playerId: null, name: playerName }],
+      game: null,
+      phase: "lobby",
+      activePlayerId: null,
+      pendingObservation: null,
+    };
+    rooms.set(room.code, room);
+    socket.join(room.code);
+    socket.data.roomCode = room.code;
+    sendRoomState(room);
+  });
 
-  // クライアントから 'chat message' というイベントを受け取った時
+  socket.on("room:join", ({ code, name, password } = {}) => {
+    if (getRoom(socket)) return sendError(socket, "すでに部屋に参加しています。");
+    const room = rooms.get(String(code ?? "").trim());
+    if (!room) return sendError(socket, "部屋が見つかりません。");
+    if (room.password !== String(password ?? "").slice(0, 64)) return sendError(socket, "パスワードが違います。");
+    if (room.game) return sendError(socket, "この部屋のゲームはすでに始まっています。");
+    if (room.members.length >= 7) return sendError(socket, "この部屋は満員です。");
+    room.members.push({ socketId: socket.id, playerId: null, name: cleanText(name, "プレイヤー") });
+    socket.join(room.code);
+    socket.data.roomCode = room.code;
+    sendRoomState(room);
+  });
+
+  socket.on("room:leave", () => {
+    const room = getRoom(socket);
+    if (!room) return;
+    removeMember(room, socket.id);
+    socket.leave(room.code);
+    socket.data.roomCode = null;
+  });
+
+  socket.on("room:start", () => {
+    const room = getRoom(socket);
+    if (!room || room.hostSocketId !== socket.id) return sendError(socket, "部屋の作成者だけが開始できます。");
+    if (room.game) return;
+    room.game = new FunctionWolfGame({ humanCount: room.members.length });
+    room.members.forEach((member, index) => {
+      const player = room.game.players[index];
+      player.name = member.name;
+      member.playerId = player.id;
+    });
+    beginInvestigation(room);
+    sendRoomState(room);
+  });
+
+  socket.on("game:investigate", ({ targetId } = {}) => {
+    const room = getRoom(socket);
+    if (!memberCanAct(room, socket, "investigation")) return sendError(socket, "今はあなたの観測ターンではありません。");
+    try {
+      room.pendingObservation = room.game.investigate(room.activePlayerId, targetId);
+      const report = room.pendingObservation;
+      socket.emit("game:observation", {
+        target: { id: report.target.id, name: report.target.name },
+        condition: { label: report.condition.label, targetSign: report.condition.targetSign },
+        observed: report.observed,
+        isMatch: report.isMatch,
+        reportedSign: report.reportedSign,
+        truthful: true,
+      });
+    } catch {
+      sendError(socket, "その対象は観測できません。");
+    }
+  });
+
+  socket.on("game:publish", ({ mode } = {}) => {
+    const room = getRoom(socket);
+    if (!memberCanAct(room, socket, "investigation") || !room.pendingObservation) return sendError(socket, "公開できる観測結果がありません。");
+    const player = getPlayer(room, room.activePlayerId);
+    const report = room.pendingObservation;
+    if (mode === "no") {
+      room.pendingObservation = null;
+      nextInvestigation(room);
+      return;
+    }
+    if (mode === "lie" && player.role === "wolf") {
+      report.isMatch = !report.isMatch;
+      const expectedSymbol = report.condition.targetSign === "positive" ? "+" : "−";
+      const unexpectedSymbol = report.condition.targetSign === "positive" ? "−" : "+";
+      report.reportedSign = report.isMatch ? expectedSymbol : unexpectedSymbol;
+      report.truthful = false;
+    }
+    room.game.publishReport(report, true);
+    room.pendingObservation = null;
+    nextInvestigation(room);
+  });
+
+  socket.on("game:begin-vote", () => {
+    const room = getRoom(socket);
+    const member = getMember(room, socket.id);
+    if (!room?.game || member?.socketId !== room.hostSocketId || room.phase !== "discussion") return sendError(socket, "投票を開始できません。");
+    beginVote(room);
+  });
+
+  socket.on("game:vote", ({ choice } = {}) => {
+    const room = getRoom(socket);
+    if (!memberCanAct(room, socket, "vote")) return sendError(socket, "今はあなたの投票ターンではありません。");
+    const alive = room.game.alivePlayers();
+    const valid = choice === "none" || alive.some((player) => player.id === choice && player.id !== room.activePlayerId);
+    if (!valid) return sendError(socket, "その投票先は選べません。");
+    room.humanVotes.set(room.activePlayerId, choice);
+    nextVote(room);
+  });
+
+  socket.on("game:begin-night", () => {
+    const room = getRoom(socket);
+    const member = getMember(room, socket.id);
+    if (!room?.game || member?.socketId !== room.hostSocketId || room.phase !== "vote-result") return sendError(socket, "夜を開始できません。");
+    beginNight(room);
+  });
+
+  socket.on("game:attack", ({ targetId } = {}) => {
+    const room = getRoom(socket);
+    if (!memberCanAct(room, socket, "night") || room.game.wolf.id !== room.activePlayerId) return sendError(socket, "今は襲撃を選べません。");
+    const target = room.game.alivePlayers().find((player) => player.id === targetId && player.role !== "wolf" && !player.infected);
+    if (!target) return sendError(socket, "その対象は襲撃できません。");
+    finishNight(room, target.id);
+  });
+
+  socket.on("game:next-round", () => {
+    const room = getRoom(socket);
+    const member = getMember(room, socket.id);
+    if (!room?.game || member?.socketId !== room.hostSocketId || room.phase !== "night-result") return sendError(socket, "次のラウンドへ進めません。");
+    room.game.startNextRound();
+    beginInvestigation(room);
+  });
+
   socket.on("chat message", (data) => {
-    // 接続している全員（送信者含む）にメッセージをブロードキャストする
-    io.emit("chat message", {
-      sender: socket.id, // 一旦Socket IDを送信者名として使用します
-      message: data.message,
+    const room = getRoom(socket);
+    if (!room) return;
+    io.to(room.code).emit("chat message", {
+      sender: getMember(room, socket.id)?.name ?? socket.id,
+      message: cleanText(data?.message),
       time: new Date().toLocaleTimeString("ja-JP"),
     });
   });
 
   socket.on("disconnect", () => {
-    console.log("ユーザーが切断しました:", socket.id);
+    const room = getRoom(socket);
+    if (!room) return;
+    removeMember(room, socket.id);
   });
 });
 
 server.listen(port, host, () => {
-  console.log(`TRUTH OR WOLF: http://${host}:${port}`);
+  console.log(`TRUTH OR WOLF: http://localhost:${port}`);
 });
