@@ -22,6 +22,25 @@ npm start
 
 オンライン版を公開する場合は、`npm start` でこのNode.jsサーバーを起動できるRender、Railway、Fly.ioなどのWebサービスを使用してください。サーバーは `PORT` 環境変数を使い、外部公開時は `0.0.0.0` で待ち受けます。Vercelの静的ホスティングだけでは、Socket.IOによる部屋同期を維持できません。
 
+### Renderの自動デプロイ
+
+リポジトリには [render.yaml](./render.yaml) を用意しています。RenderでGitHubリポジトリを接続し、`feature/gakupixelmon` ブランチを選択してWeb Serviceを作成すると、以後そのブランチへpushするたびに自動でデプロイされます。
+
+Renderの画面では次を確認してください。
+
+- **Auto-Deploy**：`Yes` または `On commit`
+- **Build Command**：`npm ci`
+- **Start Command**：`npm start`
+- **Instance Type**：`Free`（表示される場合）
+
+コードを更新した後は、次の3コマンドだけでデプロイが始まります。
+
+```bash
+git add .
+git commit -m "変更内容"
+git push origin feature/gakupixelmon
+```
+
 ## 関数人狼（メイン版）
 
 - 部屋コードとパスワードで1〜7人がオンライン参加でき、空席はCPUが担当
