@@ -17,10 +17,29 @@ npm start
 - 「部屋を作る」で部屋を作成し、表示された6桁コードとパスワードを共有する
 - 参加者は同じURLを開き、「部屋に入る」からコード・パスワードを入力する
 - 1〜7人で参加でき、足りない席はCPUが担当する
-- 観測結果・投票・襲撃はサーバーで順番に同期され、秘密関数や役職は本人以外に送信されない
+- 観測と投票は各プレイヤーから同時に受け付け、全員分が揃ってから次へ進む。秘密関数や役職は本人以外に送信されない
 - ゲーム中に参加者が退出・切断した場合は、残りの参加者を保護するためゲームを終了する
 
 オンライン版を公開する場合は、`npm start` でこのNode.jsサーバーを起動できるRender、Railway、Fly.ioなどのWebサービスを使用してください。サーバーは `PORT` 環境変数を使い、外部公開時は `0.0.0.0` で待ち受けます。Vercelの静的ホスティングだけでは、Socket.IOによる部屋同期を維持できません。
+
+### Renderの自動デプロイ
+
+リポジトリには [render.yaml](./render.yaml) を用意しています。RenderでGitHubリポジトリを接続し、`feature/gakupixelmon` ブランチを選択してWeb Serviceを作成すると、以後そのブランチへpushするたびに自動でデプロイされます。
+
+Renderの画面では次を確認してください。
+
+- **Auto-Deploy**：`Yes` または `On commit`
+- **Build Command**：`npm ci`
+- **Start Command**：`npm start`
+- **Instance Type**：`Free`（表示される場合）
+
+コードを更新した後は、次の3コマンドだけでデプロイが始まります。
+
+```bash
+git add .
+git commit -m "変更内容"
+git push origin feature/gakupixelmon
+```
 
 ## 関数人狼（メイン版）
 

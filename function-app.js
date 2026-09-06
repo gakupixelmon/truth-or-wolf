@@ -58,7 +58,7 @@ function setupScreen() {
     ${errorMarkup()}<div class="room-forms">
       <form class="room-form" id="create-room-form"><div class="panel-kicker">CREATE ROOM</div><input name="name" maxlength="24" placeholder="あなたの名前" required><input name="password" type="password" maxlength="64" placeholder="パスワード" required><button class="primary-button" type="submit">部屋を作る</button></form>
       <form class="room-form" id="join-room-form"><div class="panel-kicker">JOIN ROOM</div><input name="name" maxlength="24" placeholder="あなたの名前" required><input name="code" inputmode="numeric" maxlength="6" placeholder="6桁の部屋コード" required><input name="password" type="password" maxlength="64" placeholder="パスワード" required><button class="secondary-button" type="submit">部屋に入る</button></form>
-    </div></section><aside><div class="axiom-card"><div class="axiom-index">ONLINE / W</div><div class="formula-stack"><div class="main-equation">Tᵢ(j) = Obsᵢ(Fᵢ ∘ Fⱼ)</div><div class="sub-equation">Fwolf = W</div></div><div class="axiom-rule">1つの部屋に最大7人。足りない席はCPUが担当します。人狼関数Wは全員に公開されますが、個人関数と秘密条件は本人だけが知ります。</div><div class="feature-list"><div class="feature"><b>ルーム制</b>コードとパスワードで参加</div><div class="feature"><b>秘密情報</b>サーバーが個別に配信</div><div class="feature"><b>同期進行</b>観測・投票・夜を順番に処理</div><div class="feature"><b>CPU補充</b>空席は自動で参加</div></div></div></aside></main></div>`;
+    </div></section><aside><div class="axiom-card"><div class="axiom-index">ONLINE / W</div><div class="formula-stack"><div class="main-equation">Tᵢ(j) = Obsᵢ(Fᵢ ∘ Fⱼ)</div><div class="sub-equation">Fwolf = W</div></div><div class="axiom-rule">1つの部屋に最大7人。足りない席はCPUが担当します。人狼関数Wは全員に公開されますが、個人関数と秘密条件は本人だけが知ります。</div><div class="feature-list"><div class="feature"><b>ルーム制</b>コードとパスワードで参加</div><div class="feature"><b>秘密情報</b>サーバーが個別に配信</div><div class="feature"><b>同時操作</b>全員が自分の端末から送信</div><div class="feature"><b>CPU補充</b>空席は自動で参加</div></div></div></aside></main></div>`;
 }
 
 function lobbyScreen() {
@@ -92,7 +92,8 @@ function privateFunctionMarkup(action) {
 
 function investigationView() {
   const action = state.privateAction;
-  if (!action || action.kind !== "investigation" || action.playerId !== state.game.myPlayerId) return waitingCard(`${escapeHtml(state.game.activePlayerName ?? "誰か")}の観測中`, "観測結果が公開されるまでお待ちください。");
+  if (state.game.submitted) return waitingCard("観測を送信しました", "他のプレイヤーの観測が揃うまでお待ちください。");
+  if (!action || action.kind !== "investigation" || action.playerId !== state.game.myPlayerId) return waitingCard("他のプレイヤーの観測中", "自分の観測を送信すると、他の人を待たずに待機できます。");
   const targetSignText = signText(action.condition.targetSign);
   return `<div class="action-card"><span class="private-role">${action.role === "wolf" ? "元の人狼" : "市民"}</span><h3>あなたの秘密観測</h3><p>自分の関数を外側、指名相手の関数を内側として合成します。結果の符号だけを公開できます。目標符号は「${targetSignText}」です。</p>${privateFunctionMarkup(action)}<div class="condition-box"><div class="condition-label">YOUR TEST</div><div class="condition-value">${escapeHtml(action.condition.label)}</div></div><div class="target-grid function-targets">${action.targets.map((target) => `<button class="target-button" data-investigate="${escapeHtml(target.id)}">${escapeHtml(target.name)}<span class="function-mini">秘密関数</span></button>`).join("")}</div></div>`;
 }
@@ -109,7 +110,8 @@ function discussionView() {
 
 function voteView() {
   const action = state.privateAction;
-  if (!action || action.kind !== "vote" || action.playerId !== state.game.myPlayerId) return waitingCard(`${escapeHtml(state.game.activePlayerName ?? "誰か")}の投票中`, "全員の投票が終わると結果が公開されます。");
+  if (state.game.submitted) return waitingCard("投票を送信しました", "他のプレイヤーの投票が揃うまでお待ちください。");
+  if (!action || action.kind !== "vote" || action.playerId !== state.game.myPlayerId) return waitingCard("他のプレイヤーの投票中", "自分の投票を送信すると、他の人を待たずに待機できます。");
   return `<div class="action-card"><span class="private-role">${action.role === "wolf" ? "元の人狼" : "市民"}</span><h3>あなたの投票</h3><p>追放する相手を選んでください。追放しないこともできます。</p><div class="target-grid function-targets">${action.targets.map((target) => `<button class="target-button" data-vote="${escapeHtml(target.id)}">${escapeHtml(target.name)}</button>`).join("")}<button class="target-button" data-vote="none">∅ 追放しない</button></div></div>`;
 }
 
@@ -146,7 +148,10 @@ function outcomeModal() {
 }
 
 function rightPanel() {
-  return `<aside class="function-right"><section class="panel"><div class="panel-head"><div class="panel-kicker">Protocol</div><div class="panel-title">進行状況</div></div><div class="rule-list"><div class="rule-item"><div class="rule-number">ROOM</div><div class="rule-text">${escapeHtml(state.room.code)} · ${escapeHtml(state.game.activePlayerName ? `${state.game.activePlayerName}の操作中` : "公開情報")}</div></div><div class="rule-item"><div class="rule-number">01</div><div class="rule-text">Wを個人関数として持つ元人狼を追放すれば市民側の勝利。</div></div><div class="rule-item"><div class="rule-number">02</div><div class="rule-text">調査は Fself ∘ Ftarget を秘密条件で評価する。</div></div><div class="rule-item"><div class="rule-number">03</div><div class="rule-text">襲撃済み市民の投票は元人狼の投票先へ自動置換。</div></div></div></section></aside>`;
+  const progress = state.game.phase === "investigation" || state.game.phase === "vote"
+    ? `未送信 ${state.game.pendingCount}人`
+    : state.game.activePlayerName ? `${state.game.activePlayerName}の操作中` : "公開情報";
+  return `<aside class="function-right"><section class="panel"><div class="panel-head"><div class="panel-kicker">Protocol</div><div class="panel-title">進行状況</div></div><div class="rule-list"><div class="rule-item"><div class="rule-number">ROOM</div><div class="rule-text">${escapeHtml(state.room.code)} · ${escapeHtml(progress)}</div></div><div class="rule-item"><div class="rule-number">01</div><div class="rule-text">Wを個人関数として持つ元人狼を追放すれば市民側の勝利。</div></div><div class="rule-item"><div class="rule-number">02</div><div class="rule-text">調査は Fself ∘ Ftarget を秘密条件で評価する。</div></div><div class="rule-item"><div class="rule-number">03</div><div class="rule-text">襲撃済み市民の投票は元人狼の投票先へ自動置換。</div></div></div></section></aside>`;
 }
 
 function mainContent() {
@@ -227,9 +232,14 @@ socket.on("room:update", (room) => {
 });
 
 socket.on("game:state", (game) => {
+  const keepPrivateAction = state.game?.phase === game.phase
+    && state.privateAction?.playerId === game.myPlayerId
+    && !game.submitted;
   state.game = game;
-  state.privateAction = null;
-  state.observation = null;
+  if (!keepPrivateAction) {
+    state.privateAction = null;
+    state.observation = null;
+  }
   state.error = null;
   render();
 });

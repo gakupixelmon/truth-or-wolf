@@ -106,6 +106,16 @@ function publicVoteResult(room) {
 function gameState(room, socketId) {
   const game = room.game;
   const member = getMember(room, socketId);
+  const pendingCount = room.phase === "investigation"
+    ? room.investigationPending?.size ?? 0
+    : room.phase === "vote"
+      ? room.votePending?.size ?? 0
+      : 0;
+  const submitted = room.phase === "investigation"
+    ? room.investigationSubmitted?.has(member?.playerId) ?? false
+    : room.phase === "vote"
+      ? room.voteSubmitted?.has(member?.playerId) ?? false
+      : false;
   const activePlayer = game && room.activePlayerId ? getPlayer(room, room.activePlayerId) : null;
   return {
     roomCode: room.code,
@@ -125,6 +135,8 @@ function gameState(room, socketId) {
     voteResult: room.phase === "vote-result" || room.phase === "ended" ? publicVoteResult(room) : null,
     activePlayerId: room.activePlayerId,
     activePlayerName: activePlayer?.name ?? null,
+    pendingCount,
+    submitted,
     myPlayerId: member?.playerId ?? null,
     isHost: member?.socketId === room.hostSocketId,
   };
@@ -179,32 +191,36 @@ function privatePlayerData(room, playerId) {
   };
 }
 
-function sendInvestigationTurn(room) {
-  const player = getPlayer(room, room.activePlayerId);
-  const member = room.members.find((entry) => entry.playerId === player?.id);
-  if (!player || !member) return;
-  io.to(member.socketId).emit("game:private", {
-    kind: "investigation",
-    ...privatePlayerData(room, player.id),
-    targets: room.game.alivePlayers()
-      .filter((target) => target.id !== player.id)
-      .map((target) => ({ id: target.id, name: target.name })),
-  });
+function sendInvestigationTurns(room) {
+  for (const player of room.game.getHumanActors().filter((candidate) => candidate.alive)) {
+    if (!room.investigationPending.has(player.id)) continue;
+    const member = room.members.find((entry) => entry.playerId === player.id);
+    if (!member) continue;
+    io.to(member.socketId).emit("game:private", {
+      kind: "investigation",
+      ...privatePlayerData(room, player.id),
+      targets: room.game.alivePlayers()
+        .filter((target) => target.id !== player.id)
+        .map((target) => ({ id: target.id, name: target.name })),
+    });
+  }
 }
 
-function sendVoteTurn(room) {
-  const player = getPlayer(room, room.activePlayerId);
-  const member = room.members.find((entry) => entry.playerId === player?.id);
-  if (!player || !member) return;
-  io.to(member.socketId).emit("game:private", {
-    kind: "vote",
-    playerId: player.id,
-    name: player.name,
-    role: player.role,
-    targets: room.game.alivePlayers()
-      .filter((target) => target.id !== player.id)
-      .map((target) => ({ id: target.id, name: target.name })),
-  });
+function sendVoteTurns(room) {
+  for (const player of room.game.getHumanActors().filter((candidate) => candidate.alive)) {
+    if (!room.votePending.has(player.id)) continue;
+    const member = room.members.find((entry) => entry.playerId === player.id);
+    if (!member) continue;
+    io.to(member.socketId).emit("game:private", {
+      kind: "vote",
+      playerId: player.id,
+      name: player.name,
+      role: player.role,
+      targets: room.game.alivePlayers()
+        .filter((target) => target.id !== player.id)
+        .map((target) => ({ id: target.id, name: target.name })),
+    });
+  }
 }
 
 function sendNightTurn(room) {
@@ -224,49 +240,36 @@ function sendNightTurn(room) {
 
 function beginInvestigation(room) {
   room.phase = "investigation";
-  room.investigationQueue = room.game.getHumanActors().map((player) => player.id);
-  room.investigationIndex = 0;
-  room.activePlayerId = room.investigationQueue[0] ?? null;
-  room.pendingObservation = null;
-  if (room.activePlayerId) {
+  room.investigationPending = new Set(room.game.getHumanActors().filter((player) => player.alive).map((player) => player.id));
+  room.investigationSubmitted = new Set();
+  room.investigationReports = new Map();
+  room.activePlayerId = null;
+  if (room.investigationPending.size) {
     sendGameState(room);
-    sendInvestigationTurn(room);
+    sendInvestigationTurns(room);
     return;
   }
-  room.game.runCpuInvestigations();
-  room.phase = "discussion";
-  room.activePlayerId = null;
-  sendGameState(room);
+  finishInvestigation(room);
 }
 
 function finishInvestigation(room) {
   room.game.runCpuInvestigations();
   room.phase = "discussion";
   room.activePlayerId = null;
-  room.pendingObservation = null;
+  room.investigationPending = new Set();
+  room.investigationReports = new Map();
   sendGameState(room);
-}
-
-function nextInvestigation(room) {
-  room.investigationIndex += 1;
-  if (room.investigationIndex >= room.investigationQueue.length) {
-    finishInvestigation(room);
-    return;
-  }
-  room.activePlayerId = room.investigationQueue[room.investigationIndex];
-  sendGameState(room);
-  sendInvestigationTurn(room);
 }
 
 function beginVote(room) {
   room.phase = "vote";
-  room.voteQueue = room.game.getHumanActors().map((player) => player.id);
-  room.voteIndex = 0;
+  room.votePending = new Set(room.game.getHumanActors().filter((player) => player.alive).map((player) => player.id));
+  room.voteSubmitted = new Set();
   room.humanVotes = new Map();
-  room.activePlayerId = room.voteQueue[0] ?? null;
-  if (room.activePlayerId) {
+  room.activePlayerId = null;
+  if (room.votePending.size) {
     sendGameState(room);
-    sendVoteTurn(room);
+    sendVoteTurns(room);
     return;
   }
   finishVote(room);
@@ -277,17 +280,6 @@ function finishVote(room) {
   room.activePlayerId = null;
   room.phase = room.game.outcome ? "ended" : "vote-result";
   sendGameState(room);
-}
-
-function nextVote(room) {
-  room.voteIndex += 1;
-  if (room.voteIndex >= room.voteQueue.length) {
-    finishVote(room);
-    return;
-  }
-  room.activePlayerId = room.voteQueue[room.voteIndex];
-  sendGameState(room);
-  sendVoteTurn(room);
 }
 
 function beginNight(room) {
@@ -350,7 +342,11 @@ io.on("connection", (socket) => {
       game: null,
       phase: "lobby",
       activePlayerId: null,
-      pendingObservation: null,
+      investigationPending: new Set(),
+      investigationSubmitted: new Set(),
+      investigationReports: new Map(),
+      votePending: new Set(),
+      voteSubmitted: new Set(),
     };
     rooms.set(room.code, room);
     socket.join(room.code);
@@ -395,10 +391,14 @@ io.on("connection", (socket) => {
 
   socket.on("game:investigate", ({ targetId } = {}) => {
     const room = getRoom(socket);
-    if (!memberCanAct(room, socket, "investigation")) return sendError(socket, "今はあなたの観測ターンではありません。");
+    const member = getMember(room, socket.id);
+    const playerId = member?.playerId;
+    if (!room?.game || room.phase !== "investigation" || !room.investigationPending.has(playerId) || room.investigationReports.has(playerId)) {
+      return sendError(socket, "観測済みか、現在は観測できない状態です。");
+    }
     try {
-      room.pendingObservation = room.game.investigate(room.activePlayerId, targetId);
-      const report = room.pendingObservation;
+      const report = room.game.investigate(playerId, targetId);
+      room.investigationReports.set(playerId, report);
       socket.emit("game:observation", {
         target: { id: report.target.id, name: report.target.name },
         condition: { label: report.condition.label, targetSign: report.condition.targetSign },
@@ -414,24 +414,29 @@ io.on("connection", (socket) => {
 
   socket.on("game:publish", ({ mode } = {}) => {
     const room = getRoom(socket);
-    if (!memberCanAct(room, socket, "investigation") || !room.pendingObservation) return sendError(socket, "公開できる観測結果がありません。");
-    const player = getPlayer(room, room.activePlayerId);
-    const report = room.pendingObservation;
-    if (mode === "no") {
-      room.pendingObservation = null;
-      nextInvestigation(room);
-      return;
+    const member = getMember(room, socket.id);
+    const player = getPlayer(room, member?.playerId);
+    const report = room?.investigationReports.get(member?.playerId);
+    if (!room?.game || room.phase !== "investigation" || !player || !report || !room.investigationPending.has(player.id)) {
+      return sendError(socket, "公開できる観測結果がありません。");
     }
-    if (mode === "lie" && player.role === "wolf") {
+    if (mode === "no") {
+      room.investigationReports.delete(player.id);
+    } else {
+      if (mode === "lie" && player.role === "wolf") {
       report.isMatch = !report.isMatch;
       const expectedSymbol = report.condition.targetSign === "positive" ? "+" : "−";
       const unexpectedSymbol = report.condition.targetSign === "positive" ? "−" : "+";
       report.reportedSign = report.isMatch ? expectedSymbol : unexpectedSymbol;
       report.truthful = false;
+      }
+      room.game.publishReport(report, true);
     }
-    room.game.publishReport(report, true);
-    room.pendingObservation = null;
-    nextInvestigation(room);
+    room.investigationReports.delete(player.id);
+    room.investigationPending.delete(player.id);
+    room.investigationSubmitted.add(player.id);
+    if (room.investigationPending.size === 0) finishInvestigation(room);
+    else sendGameState(room);
   });
 
   socket.on("game:begin-vote", () => {
@@ -443,12 +448,17 @@ io.on("connection", (socket) => {
 
   socket.on("game:vote", ({ choice } = {}) => {
     const room = getRoom(socket);
-    if (!memberCanAct(room, socket, "vote")) return sendError(socket, "今はあなたの投票ターンではありません。");
+    const member = getMember(room, socket.id);
+    const playerId = member?.playerId;
+    if (!room?.game || room.phase !== "vote" || !room.votePending.has(playerId)) return sendError(socket, "投票済みか、現在は投票できない状態です。");
     const alive = room.game.alivePlayers();
-    const valid = choice === "none" || alive.some((player) => player.id === choice && player.id !== room.activePlayerId);
+    const valid = choice === "none" || alive.some((player) => player.id === choice && player.id !== playerId);
     if (!valid) return sendError(socket, "その投票先は選べません。");
-    room.humanVotes.set(room.activePlayerId, choice);
-    nextVote(room);
+    room.humanVotes.set(playerId, choice);
+    room.votePending.delete(playerId);
+    room.voteSubmitted.add(playerId);
+    if (room.votePending.size === 0) finishVote(room);
+    else sendGameState(room);
   });
 
   socket.on("game:begin-night", () => {
