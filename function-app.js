@@ -19,6 +19,7 @@ const state = {
   error: null,
 };
 
+
 let views;
 let tutorial;
 

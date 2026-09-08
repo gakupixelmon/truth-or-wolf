@@ -25,7 +25,16 @@ export function createViews({ state }) {
 
   function functionPlayer(player) {
     const mine = state.game.myPlayerId === player.id;
-    return `<div class="function-player ${player.alive ? "" : "dead"}"><div class="function-player-top"><span class="function-player-name">${player.alive ? "" : "† "}${escapeHtml(player.name)}${mine ? "（あなた）" : ""}</span>${player.human ? `<span class="human-badge">ONLINE</span>` : `<span class="human-badge">CPU</span>`}</div><div class="function-expression">F${player.id.slice(1)}(x) = ?</div><div class="function-family">秘密関数は本人だけが知る</div></div>`;
+    // 自分の場合で、かつ秘密情報（privateAction）が届いていれば関数名を表示する
+    let expression = `F${player.id.slice(1)}(x) = ?`;
+    if (mine && state.privateAction && state.privateAction.function) {
+      expression = escapeHtml(state.privateAction.function.label);
+    } else if (mine && player.baseFunction) {
+      // チュートリアル用のフォールバック
+      expression = escapeHtml(player.baseFunction.label);
+    }
+    
+    return `<div class="function-player ${player.alive ? "" : "dead"}"><div class="function-player-top"><span class="function-player-name">${player.alive ? "" : "† "}${escapeHtml(player.name)}${mine ? "（あなた）" : ""}</span>${player.human ? `<span class="human-badge">ONLINE</span>` : `<span class="human-badge">CPU</span>`}</div><div class="function-expression">${expression}</div><div class="function-family">秘密関数は本人だけが知る</div></div>`;
   }
 
   function leftPanel() {
