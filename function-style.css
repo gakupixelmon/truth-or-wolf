@@ -111,3 +111,64 @@
   .function-roster { grid-template-columns: 1fr; }
   .action-buttons { flex-direction: column; }
 }
+
+/* スマートフォン用UI：操作面を先に表示し、情報パネルを後ろへ移す */
+@media (max-width: 760px) {
+  body { overflow-x: hidden; }
+  .topbar { min-height: 64px; height: auto; padding: 10px 14px; gap: 10px; }
+  .brand { gap: 9px; min-width: 0; }
+  .brand-mark { width: 30px; height: 30px; }
+  .brand-mark span { font-size: 17px; }
+  .brand-name { font-size: 13px; letter-spacing: .08em; white-space: nowrap; }
+  .brand-sub { display: none; }
+  .status-line { gap: 7px; font-size: 9px; white-space: nowrap; }
+  .status-line b { font-size: 10px; }
+  .hero { min-height: auto; padding: 34px 16px 48px; gap: 24px; }
+  .function-hero h1 { font-size: clamp(42px, 15vw, 64px); }
+  .hero-copy { font-size: 14px; line-height: 1.8; }
+  .room-forms { grid-template-columns: 1fr; gap: 10px; margin-top: 20px; }
+  .room-form { padding: 14px; }
+  .room-form input { min-height: 48px; font-size: 16px; }
+  .room-form button { min-height: 48px; }
+  .axiom-card { padding: 20px; }
+  .formula-stack { padding: 16px 0; }
+  .formula-stack .main-equation { font-size: 21px; }
+  .function-board { display: flex; flex-direction: column; padding: 8px; gap: 10px; }
+  .function-main { order: 1; min-height: calc(100vh - 90px); }
+  .function-left { order: 2; display: flex; flex-direction: column; gap: 10px; margin: 0; }
+  .function-left .omega-card { order: 0; margin: 0; }
+  .function-left > .panel:not(.omega-card) { order: 1; }
+  .function-right { display: none; }
+  .function-main-body { padding: 14px 10px 24px; }
+  .panel-head { padding: 14px; }
+  .panel-title { font-size: 15px; }
+  .round-intro { text-align: left; padding: 4px 0 16px; }
+  .round-intro h2 { font-size: 22px; }
+  .action-card { width: 100%; padding: 18px 14px; }
+  .action-card h3 { font-size: 19px; }
+  .action-card > p { font-size: 12px; line-height: 1.7; }
+  .condition-box { padding: 12px; }
+  .condition-value { font-size: 15px; overflow-wrap: anywhere; }
+  .function-vector { font-size: 10px; overflow-wrap: anywhere; }
+  .target-grid.function-targets { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .target-button { min-height: 54px; padding: 10px 6px; font-size: 12px; touch-action: manipulation; }
+  .target-button .function-mini { font-size: 9px; }
+  .action-buttons { gap: 10px; }
+  .action-buttons > button { width: 100%; min-height: 50px; }
+  .reports { max-height: none; }
+  .report { padding: 11px; }
+  .report-head { gap: 6px; line-height: 1.4; }
+  .report-formula { font-size: 13px; overflow-wrap: anywhere; }
+  .room-lobby { width: min(100%, 430px); padding: 24px 16px; }
+  .room-lobby button { width: 100%; min-height: 48px; }
+  .room-member { min-height: 44px; align-items: center; }
+  .modal { max-height: calc(100vh - 24px); overflow-y: auto; padding: 26px 16px; }
+  .outcome-reveal { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 380px) {
+  .brand-name { font-size: 11px; }
+  .status-line { font-size: 8px; }
+  .target-grid.function-targets { grid-template-columns: 1fr; }
+  .function-player-name { font-size: 10px; }
+}

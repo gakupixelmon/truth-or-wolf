@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { FunctionWolfGame, MODULUS } from "../function-game.js";
+import { FunctionWolfGame, INPUT_COUNT } from "../function-game.js";
 
 function seeded(seed = 42) {
   let value = seed >>> 0;
@@ -34,13 +34,15 @@ test("each citizen test has false positives but all tests together isolate the w
   }
 });
 
-test("every citizen obtains a positive sign when testing the original wolf", () => {
+test("every citizen obtains the configured ordinary sign when testing the original wolf", () => {
   for (let seed = 1; seed <= 40; seed += 1) {
     const game = new FunctionWolfGame({ humanCount: 7, rng: seeded(seed) });
     for (const citizen of game.players.filter((player) => player.role === "citizen")) {
       const report = game.investigate(citizen.id, game.wolf.id);
-      assert.equal(report.observed.key, "positive");
-      assert.equal(report.reportedSign, "+");
+      const expectedSign = citizen.condition.targetSign;
+      const expectedSymbol = expectedSign === "positive" ? "+" : expectedSign === "negative" ? "−" : "0";
+      assert.equal(report.observed.key, expectedSign);
+      assert.equal(report.reportedSign, expectedSymbol);
     }
   }
 });
@@ -48,7 +50,7 @@ test("every citizen obtains a positive sign when testing the original wolf", () 
 test("the original wolf owns exactly the publicly announced wolf function", () => {
   const game = new FunctionWolfGame({ rng: seeded(6) });
   assert.equal(game.wolf.baseFunction.id, game.omega.id);
-  const wolfTable = Array.from({ length: MODULUS }, (_, input) => game.omega.evaluate(input)).join(",");
+  const wolfTable = Array.from({ length: INPUT_COUNT }, (_, input) => game.omega.evaluate(input)).join(",");
   assert.equal(game.players.filter((player) => game.privateFunctionTable(player).join(",") === wolfTable).length, 1);
 });
 
@@ -60,7 +62,7 @@ test("an attacked citizen survives, remains a citizen and secretly becomes compo
   assert.equal(target.role, "citizen");
   assert.equal(target.infected, true);
   assert.equal(game.isComposed(target), true);
-  for (let input = 0; input < MODULUS; input += 1) {
+  for (let input = 0; input < INPUT_COUNT; input += 1) {
     assert.equal(game.currentValue(target, input), game.omega.evaluate(target.baseFunction.evaluate(input)));
   }
 });

@@ -1,10 +1,7 @@
-export const MODULUS = 7;
+// 関数へ入力する離散点の数。剰余（mod）演算は行わない。
+export const INPUT_COUNT = 7;
 
 export const FUNCTION_NAMES = ["あなた", "アオイ", "レン", "ミナト", "ユイ", "カイ", "スズ"];
-
-function mod(value) {
-  return ((value % MODULUS) + MODULUS) % MODULUS;
-}
 
 function shuffle(items, rng) {
   const result = [...items];
@@ -26,51 +23,50 @@ function weightedChoice(items, score, rng) {
 }
 
 function makeFunction(id, label, family, evaluate) {
-  return { id, label, family, evaluate: (x) => mod(evaluate(mod(x))) };
+  return { id, label, family, evaluate };
+}
+
+function signedCoefficient(value, variable = "") {
+  const magnitude = Math.abs(value);
+  const coefficient = magnitude === 1 && variable ? "" : magnitude;
+  return `${value < 0 ? "−" : ""}${coefficient}${variable}`;
+}
+
+function appendSignedTerm(value, variable = "") {
+  if (value === 0) return "";
+  return ` ${value < 0 ? "−" : "+"} ${signedCoefficient(Math.abs(value), variable)}`;
 }
 
 function functionSignature(fn) {
-  return Array.from({ length: MODULUS }, (_, input) => fn.evaluate(input)).join(",");
+  return Array.from({ length: INPUT_COUNT }, (_, input) => fn.evaluate(input)).join(",");
 }
 
 function makeFunctionLibrary() {
   const functions = [];
-  for (const [a, b] of [[1, 1], [1, 3], [2, 1], [2, 3], [3, 2], [4, 1], [5, 4], [6, 2]]) {
-    functions.push(makeFunction(`linear-${a}-${b}`, `f(x) = ${a === 1 ? "" : `${a}`}x + ${b}`, "一次関数", (x) => a * x + b));
+  for (const [a, b] of [[1, -6], [1, -2], [1, 1], [1, 5], [2, -8], [2, 1], [-1, 6], [-1, 2], [-2, 10], [-2, 3]]) {
+    functions.push(makeFunction(`linear-${a}-${b}`, `f(x) = ${signedCoefficient(a, "x")}${appendSignedTerm(b)}`, "一次関数", (x) => a * x + b));
   }
-  for (const [a, b, c] of [[1, 0, 1], [1, 1, 2], [2, 0, 3], [2, 1, 0], [3, 2, 1], [4, 1, 2]]) {
-    const aStr = a === 1 ? "x²" : `${a}x²`;
-    const bStr = b === 0 ? "" : (b === 1 ? " + x" : ` + ${b}x`);
-    const cStr = c === 0 ? "" : ` + ${c}`;
+  for (const [a, b, c] of [[1, 0, -8], [1, 1, -6], [1, -1, 4], [2, 0, -10], [2, 1, -5], [-1, 0, 8], [-1, 2, 3]]) {
+    const aStr = signedCoefficient(a, "x²");
+    const bStr = appendSignedTerm(b, "x");
+    const cStr = appendSignedTerm(c);
     functions.push(makeFunction(`quadratic-${a}-${b}-${c}`, `f(x) = ${aStr}${bStr}${cStr}`, "二次関数", (x) => a * x * x + b * x + c));
   }
-  for (const [a, b] of [[1, 1], [2, 3], [3, 2], [5, 1]]) {
-    const aStr = a === 1 ? "x³" : `${a}x³`;
-    const bStr = b === 1 ? " + x" : ` + ${b}x`;
-    functions.push(makeFunction(`cubic-${a}-${b}`, `f(x) = ${aStr}${bStr}`, "三次関数", (x) => a * x * x * x + b * x));
+  for (const [a, b, c] of [[1, 1, -8], [2, -3, 2], [-1, 2, 6], [-2, 1, 5]]) {
+    const aStr = signedCoefficient(a, "x³");
+    const bStr = appendSignedTerm(b, "x");
+    const cStr = appendSignedTerm(c);
+    functions.push(makeFunction(`cubic-${a}-${b}-${c}`, `f(x) = ${aStr}${bStr}${cStr}`, "三次関数", (x) => a * x * x * x + b * x + c));
   }
-  const tables = [
-    [0, 2, 5, 1, 6, 3, 4],
-    [3, 0, 4, 6, 1, 5, 2],
-    [1, 4, 0, 5, 2, 6, 3],
-    [6, 2, 0, 4, 1, 3, 5],
-  ];
-  tables.forEach((table, index) => functions.push(makeFunction(
-    `table-${index}`,
-    `f = [${table.join(", ")}]`,
-    "表関数",
-    (x) => table[x],
-  )));
   return functions;
 }
 
 function signedValue(value) {
-  const residue = mod(value);
-  return residue <= 3 ? residue : residue - MODULUS;
+  return value;
 }
 
 function makeCondition(_index, rng) {
-  const input = Math.floor(rng() * MODULUS);
+  const input = Math.floor(rng() * INPUT_COUNT);
   return {
     input,
     label: `x = ${input} で合成値の符号を見る`,
@@ -210,7 +206,7 @@ export class FunctionWolfGame {
   }
 
   privateFunctionTable(player) {
-    return Array.from({ length: MODULUS }, (_, input) => player.baseFunction.evaluate(input));
+    return Array.from({ length: INPUT_COUNT }, (_, input) => player.baseFunction.evaluate(input));
   }
 
   wolfCandidateSet(observerId) {
@@ -395,4 +391,3 @@ export class FunctionWolfGame {
     this.lastAttack = null;
   }
 }
-
