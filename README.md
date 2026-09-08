@@ -44,7 +44,7 @@ git push origin feature/gakupixelmon
 ## 関数人狼（メイン版）
 
 - 部屋コードとパスワードで1〜7人がオンライン参加でき、空席はCPUが担当
-- 一次・二次・三次・表関数を使用し、各人が知るのは自分の個人関数だけ
+- 一次・二次・三次関数を使用し、入力点`0〜6`で計算する（剰余演算は行わない）
 - 人狼関数 `W` の定義は全員に公開され、元人狼だけが `F = W` を持つ
 - 市民は個別の秘密条件で `F自分 ∘ F指名相手` を評価し、`F自分 ∘ W` の結果と比較する
 - 各市民の検査には必ず2〜4人の候補が残り、一人の結果では元人狼を断定できない
@@ -55,6 +55,24 @@ git push origin feature/gakupixelmon
 - 元人狼と襲撃済み市民が生存者の過半数を超えれば人狼勝利
 
 旧バージョンは `http://localhost:4173/classic.html` からプレイできます。
+
+### コード構成（共同開発向け）
+
+メイン版の画面とルールは、変更箇所が衝突しにくいように分離しています。
+
+- `function-app.js`：状態、描画の切り替え、Socket.IO の初期化だけを行うエントリーポイント
+- `function-ui/views.js`：通常ゲームの画面表示
+- `function-ui/tutorial.js`：チュートリアル画面とチュートリアル専用イベント
+- `function-ui/events.js`：フォーム、ボタン、Socket.IO イベントの接続
+- `function-ui/format.js`：HTMLエスケープ、符号・フェーズ表示
+- `rules/functions.js`：関数ライブラリ、秘密条件、偽陽性を含む配役バランス
+- `rules/investigation.js`：合成観測、公開結果、CPUの事後確率更新
+- `rules/voting.js`：CPU投票、感染者の投票置換、投票集計
+- `rules/infection.js`：夜の襲撃と秘密合成
+- `rules/victory.js`：市民側・人狼側の勝利条件
+- `rules/constants.js`：人数、フェーズ、共通定数
+
+新しいルールを追加するときは、該当する `rules/*.js` に純粋な関数として実装し、`function-game.js` の薄いメソッドから呼び出してください。画面文言や選択肢は `function-ui/views.js`、Socket.IO の送受信は `function-ui/events.js` を変更します。
 
 ## クラシック論理版
 
