@@ -67,6 +67,29 @@ test("an attacked citizen survives, remains a citizen and secretly becomes compo
   }
 });
 
+test("a wolf attack only infects when the guessed function matches", () => {
+  const game = new FunctionWolfGame({ humanCount: 7, rng: seeded(91) });
+  const target = game.players.find((player) => player.role === "citizen");
+  const wrongFunction = game.knownFunctionOptions().find((option) => option.id !== target.baseFunction.id);
+  const miss = game.resolveNight(target.id, wrongFunction.id);
+  assert.equal(miss.success, false);
+  assert.equal(target.infected, false);
+
+  game.startNextRound();
+  const hitTarget = game.players.find((player) => player.role === "citizen" && !player.infected);
+  const hit = game.resolveNight(hitTarget.id, hitTarget.baseFunction.id);
+  assert.equal(hit.success, true);
+  assert.equal(hitTarget.infected, true);
+});
+
+test("the wolf function options reveal types but not player ownership", () => {
+  const game = new FunctionWolfGame({ humanCount: 7, rng: seeded(92) });
+  const options = game.knownFunctionOptions();
+  assert.equal(options.length, 6);
+  assert.ok(options.every((option) => option.id && option.label));
+  assert.ok(options.every((option) => option.id !== game.wolf.baseFunction.id));
+});
+
 test("investigation evaluates the observer function after the nominated function", () => {
   const game = new FunctionWolfGame({ humanCount: 7, rng: seeded(13) });
   const observer = game.players.find((player) => player.role === "citizen");

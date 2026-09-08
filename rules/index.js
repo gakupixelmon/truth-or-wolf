@@ -5,4 +5,3 @@ export * from "./investigation.js";
 export * from "./voting.js";
 export * from "./infection.js";
 export * from "./victory.js";
-

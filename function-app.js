@@ -10,6 +10,7 @@ const state = {
   room: null,
   game: null,
   privateAction: null,
+  nightTargetId: null,
   observation: null,
   humanVotes: new Map(),
   voteResult: null,

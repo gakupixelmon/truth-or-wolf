@@ -91,10 +91,16 @@ export function createViews({ state }) {
   function nightView() {
     const action = state.privateAction;
     if (!action || action.kind !== "night" || action.playerId !== state.game.myPlayerId) return waitingCard("夜の処理中", "人狼が襲撃先を選ぶまでお待ちください。");
-    return `<div class="action-card"><span class="private-role">元の人狼</span><h3>襲撃対象を選ぶ</h3><p>選んだ市民の関数は、本人に知られないまま W と合成されます。</p><div class="target-grid function-targets">${action.targets.map((target) => `<button class="target-button" data-attack="${escapeHtml(target.id)}">${escapeHtml(target.name)}<span class="function-mini">秘密関数</span></button>`).join("")}</div></div>`;
+    if (!state.nightTargetId) {
+      return `<div class="action-card"><span class="private-role">元の人狼</span><h3>襲撃対象を選ぶ</h3><p>まず襲う相手を選び、その後に相手の関数を推測します。関数の種類は分かりますが、誰がどの関数かは分かりません。</p><div class="target-grid function-targets">${action.targets.map((target) => `<button class="target-button" data-attack-target="${escapeHtml(target.id)}">${escapeHtml(target.name)}<span class="function-mini">関数は非公開</span></button>`).join("")}</div></div>`;
+    }
+    const target = action.targets.find((candidate) => candidate.id === state.nightTargetId);
+    if (!target) return waitingCard("襲撃対象を確認中", "対象が更新されました。もう一度選び直してください。");
+    const options = action.functionOptions ?? [];
+    return `<div class="action-card"><span class="private-role">元の人狼</span><h3>${escapeHtml(target.name)}の関数を推測</h3><p>この推測が的中した場合だけ、対象の関数に W が合成されます。</p><div class="condition-box"><div class="condition-label">SELECTED TARGET</div><div class="condition-value">${escapeHtml(target.name)}</div></div><div class="target-grid function-targets">${options.map((option) => `<button class="target-button" data-attack-function="${escapeHtml(option.id)}">${escapeHtml(option.label)}</button>`).join("")}</div><div class="action-buttons"><button class="secondary-button" id="cancel-attack-target">対象を選び直す</button></div></div>`;
   }
 
-  function nightResultView() { return `<div class="action-card"><span class="private-role">SECRET COMPOSITION</span><h3>夜が明けた</h3><p>生存者一人の関数に W が秘密裏に合成されました。対象者自身も、その変化を知りません。</p><div class="result-value">Fᵢ′ = W ∘ Fᵢ</div><div class="action-buttons">${state.game.isHost ? `<button class="primary-button" id="next-round">ROUND ${state.game.round + 1}へ</button>` : `<span class="waiting-note">部屋主が次のラウンドを開始します</span>`}</div></div>`; }
+  function nightResultView() { return `<div class="action-card"><span class="private-role">SECRET COMPOSITION</span><h3>夜が明けた</h3><p>人狼の襲撃処理が完了しました。関数の推測が的中した場合だけ、対象の関数に W が秘密裏に合成されます。対象者自身には変化が分かりません。</p><div class="result-value">Fᵢ′ = W ∘ Fᵢ（的中時のみ）</div><div class="action-buttons">${state.game.isHost ? `<button class="primary-button" id="next-round">ROUND ${state.game.round + 1}へ</button>` : `<span class="waiting-note">部屋主が次のラウンドを開始します</span>`}</div></div>`; }
 
   function outcomeModal() {
     const outcome = state.game.outcome;
@@ -106,7 +112,7 @@ export function createViews({ state }) {
   function rightPanel() {
     const roomCode = state.room?.code ?? "TUTORIAL";
     const progress = state.game.phase === "investigation" || state.game.phase === "vote" ? `未送信 ${state.game.pendingCount}人` : state.game.activePlayerName ? `${state.game.activePlayerName}の操作中` : "公開情報";
-    return `<aside class="function-right"><section class="panel"><div class="panel-head"><div class="panel-kicker">Protocol</div><div class="panel-title">進行状況</div></div><div class="rule-list"><div class="rule-item"><div class="rule-number">ROOM</div><div class="rule-text">${escapeHtml(roomCode)} · ${escapeHtml(progress)}</div></div><div class="rule-item"><div class="rule-number">01</div><div class="rule-text">Wを個人関数として持つ元人狼を追放すれば市民側の勝利。</div></div><div class="rule-item"><div class="rule-number">02</div><div class="rule-text">調査は Fself ∘ Ftarget を秘密条件で評価する。</div></div><div class="rule-item"><div class="rule-number">03</div><div class="rule-text">襲撃済み市民の投票は元人狼の投票先へ自動置換。</div></div></div></section></aside>`;
+    return `<aside class="function-right"><section class="panel"><div class="panel-head"><div class="panel-kicker">Protocol</div><div class="panel-title">進行状況</div></div><div class="rule-list"><div class="rule-item"><div class="rule-number">ROOM</div><div class="rule-text">${escapeHtml(roomCode)} · ${escapeHtml(progress)}</div></div><div class="rule-item"><div class="rule-number">01</div><div class="rule-text">Wを個人関数として持つ元人狼を追放すれば市民側の勝利。</div></div><div class="rule-item"><div class="rule-number">02</div><div class="rule-text">調査は Fself ∘ Ftarget を秘密条件で評価する。</div></div><div class="rule-item"><div class="rule-number">03</div><div class="rule-text">襲撃済み市民の投票は元人狼の投票先へ自動置換。</div></div><div class="rule-item"><div class="rule-number">04</div><div class="rule-text">襲撃対象と関数推測が一致したときだけ秘密合成。</div></div></div></section></aside>`;
   }
 
   function mainContent() {
@@ -126,4 +132,3 @@ export function createViews({ state }) {
 
   return { header, errorMarkup, setupScreen, lobbyScreen, leftPanel, rightPanel, board };
 }
-
