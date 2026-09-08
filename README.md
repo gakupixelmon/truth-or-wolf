@@ -56,6 +56,24 @@ git push origin feature/gakupixelmon
 
 旧バージョンは `http://localhost:4173/classic.html` からプレイできます。
 
+### コード構成（共同開発向け）
+
+メイン版の画面とルールは、変更箇所が衝突しにくいように分離しています。
+
+- `function-app.js`：状態、描画の切り替え、Socket.IO の初期化だけを行うエントリーポイント
+- `function-ui/views.js`：通常ゲームの画面表示
+- `function-ui/tutorial.js`：チュートリアル画面とチュートリアル専用イベント
+- `function-ui/events.js`：フォーム、ボタン、Socket.IO イベントの接続
+- `function-ui/format.js`：HTMLエスケープ、符号・フェーズ表示
+- `rules/functions.js`：関数ライブラリ、秘密条件、偽陽性を含む配役バランス
+- `rules/investigation.js`：合成観測、公開結果、CPUの事後確率更新
+- `rules/voting.js`：CPU投票、感染者の投票置換、投票集計
+- `rules/infection.js`：夜の襲撃と秘密合成
+- `rules/victory.js`：市民側・人狼側の勝利条件
+- `rules/constants.js`：人数、フェーズ、共通定数
+
+新しいルールを追加するときは、該当する `rules/*.js` に純粋な関数として実装し、`function-game.js` の薄いメソッドから呼び出してください。画面文言や選択肢は `function-ui/views.js`、Socket.IO の送受信は `function-ui/events.js` を変更します。
+
 ## クラシック論理版
 
 - プレイヤー1人 + CPU 6人

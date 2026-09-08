@@ -15,6 +15,10 @@ const files = new Map([
   ["/app.js", ["app.js", "text/javascript; charset=utf-8"]],
   ["/function-app.js", ["function-app.js", "text/javascript; charset=utf-8"]],
   ["/function-game.js", ["function-game.js", "text/javascript; charset=utf-8"]],
+  ["/function-ui/format.js", ["function-ui/format.js", "text/javascript; charset=utf-8"]],
+  ["/function-ui/views.js", ["function-ui/views.js", "text/javascript; charset=utf-8"]],
+  ["/function-ui/tutorial.js", ["function-ui/tutorial.js", "text/javascript; charset=utf-8"]],
+  ["/function-ui/events.js", ["function-ui/events.js", "text/javascript; charset=utf-8"]],
   ["/game.js", ["game.js", "text/javascript; charset=utf-8"]],
   ["/logic.js", ["logic.js", "text/javascript; charset=utf-8"]],
 ]);
