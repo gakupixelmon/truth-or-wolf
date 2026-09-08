@@ -239,6 +239,8 @@ function sendNightTurn(room) {
     targets: room.game.alivePlayers()
       .filter((target) => target.role !== "wolf" && !target.infected)
       .map((target) => ({ id: target.id, name: target.name })),
+    // 人狼には関数の種類だけを渡す。どのプレイヤーが持つかは渡さない。
+    functionOptions: room.game.knownFunctionOptions(),
   });
 }
 
@@ -302,8 +304,8 @@ function beginNight(room) {
   sendGameState(room);
 }
 
-function finishNight(room, targetId) {
-  room.game.resolveNight(targetId);
+function finishNight(room, targetId, functionId) {
+  room.game.resolveNight(targetId, functionId);
   room.phase = room.game.outcome ? "ended" : "night-result";
   room.activePlayerId = null;
   sendGameState(room);
@@ -472,12 +474,14 @@ io.on("connection", (socket) => {
     beginNight(room);
   });
 
-  socket.on("game:attack", ({ targetId } = {}) => {
+  socket.on("game:attack", ({ targetId, functionId } = {}) => {
     const room = getRoom(socket);
     if (!memberCanAct(room, socket, "night") || room.game.wolf.id !== room.activePlayerId) return sendError(socket, "今は襲撃を選べません。");
     const target = room.game.alivePlayers().find((player) => player.id === targetId && player.role !== "wolf" && !player.infected);
     if (!target) return sendError(socket, "その対象は襲撃できません。");
-    finishNight(room, target.id);
+    const functionOptions = room.game.knownFunctionOptions();
+    if (!functionOptions.some((option) => option.id === functionId)) return sendError(socket, "その関数は推測候補にありません。");
+    finishNight(room, target.id, functionId);
   });
 
   socket.on("game:next-round", () => {

@@ -2,7 +2,7 @@ import { INPUT_COUNT, FUNCTION_NAMES, PLAYER_COUNT, PHASES } from "./rules/const
 import { buildBalancedFunctions } from "./rules/functions.js";
 import { investigate, publishReport, runCpuInvestigations, updateSuspicion } from "./rules/investigation.js";
 import { resolveVotes } from "./rules/voting.js";
-import { resolveNight } from "./rules/infection.js";
+import { knownFunctionOptions, resolveNight } from "./rules/infection.js";
 import { checkOutcome } from "./rules/victory.js";
 
 export { INPUT_COUNT, FUNCTION_NAMES } from "./rules/constants.js";
@@ -86,7 +86,8 @@ export class FunctionWolfGame {
   }
 
   resolveVotes(humanVotes = new Map()) { return resolveVotes(this, humanVotes); }
-  resolveNight(targetId = null) { return resolveNight(this, targetId); }
+  resolveNight(targetId = null, functionId = undefined) { return resolveNight(this, targetId, functionId); }
+  knownFunctionOptions() { return knownFunctionOptions(this); }
   checkOutcome(exiled = null) { return checkOutcome(this, exiled); }
 
   startNextRound() {
