@@ -130,7 +130,7 @@ function tutorialMainContent() {
     const targetName = step === "day1-observation" ? "ミナト" : "レン";
     return `<div class="action-card"><span class="private-role">PRIVATE RESULT</span><h3>${targetName}の合成演算</h3>
       <p>計算結果の符号が出ました。結果を村に公開しましょう。</p>
-      <div class="result-value">sgn = +</div>
+      <div class="result-value">符号は＋です</div>
       <div class="action-buttons">
         <button class="primary-button highlight-btn" data-tut-pub="yes">符号を公開する</button>
         <button class="secondary-button disabled-target">結果を伏せる</button>
@@ -365,7 +365,7 @@ function leftPanel() {
 
 function reportsMarkup() {
   if (!state.game.reports.length) return `<div class="report-empty">公開された観測結果はまだありません。</div>`;
-  return `<div class="reports">${[...state.game.reports].reverse().map((report) => `<div class="report"><div class="report-head"><span>ROUND ${report.round} · ${escapeHtml(report.observerName)} → ${escapeHtml(report.targetName)}</span><span>REPORT</span></div><div class="report-formula">sgn(F<sub>${escapeHtml(report.observerName)}</sub> ∘ F<sub>${escapeHtml(report.targetName)}</sub>) = ${escapeHtml(report.reportedSign)}</div><div class="message-gloss">「私の合成演算の符号は ${escapeHtml(report.reportedSign)} だった」</div></div>`).join("")}</div>`;
+  return `<div class="reports">${[...state.game.reports].reverse().map((report) => `<div class="report"><div class="report-head"><span>ROUND ${report.round} · ${escapeHtml(report.observerName)} → ${escapeHtml(report.targetName)}</span><span>REPORT</span></div><div class="report-formula">F<sub>${escapeHtml(report.observerName)}</sub> ∘ F<sub>${escapeHtml(report.targetName)}</sub> の符号は${escapeHtml(report.reportedSign)}です。</div><div class="message-gloss">「私の合成演算の符号は ${escapeHtml(report.reportedSign)} だった」</div></div>`).join("")}</div>`;
 }
 
 function waitingCard(title, body) {

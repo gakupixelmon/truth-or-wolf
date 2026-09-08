@@ -78,7 +78,7 @@ function makeCondition(_index, rng) {
       const signed = signedValue(value);
       const key = signed > 0 ? "positive" : signed < 0 ? "negative" : "zero";
       const symbol = signed > 0 ? "+" : signed < 0 ? "−" : "0";
-      return { key, symbol, display: `sgn = ${symbol}` };
+      return { key, symbol, display: `符号は${symbol}です。` };
     },
   };
 }
