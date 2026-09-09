@@ -33,6 +33,7 @@ export class FunctionWolfGame {
     this.attackHistory = [];
     this.lastVote = null;
     this.lastAttack = null;
+    this.wolfFunctionOptions = null;
     this.outcome = null;
     this.initializeBeliefs();
   }

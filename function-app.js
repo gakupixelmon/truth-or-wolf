@@ -12,6 +12,7 @@ const state = {
   privateAction: null,
   nightTargetId: null,
   observation: null,
+  attackResult: null,
   humanVotes: new Map(),
   voteResult: null,
   tutorialMode: false,
