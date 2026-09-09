@@ -84,10 +84,14 @@ test("a wolf attack only infects when the guessed function matches", () => {
 
 test("the wolf function options reveal types but not player ownership", () => {
   const game = new FunctionWolfGame({ humanCount: 7, rng: seeded(92) });
+  const participantOrder = game.players.filter((player) => player.role !== "wolf").map((player) => player.baseFunction.id);
   const options = game.knownFunctionOptions();
+  const laterOptions = game.knownFunctionOptions();
   assert.equal(options.length, 6);
   assert.ok(options.every((option) => option.id && option.label));
   assert.ok(options.every((option) => option.id !== game.wolf.baseFunction.id));
+  assert.deepEqual(laterOptions, options);
+  assert.notDeepEqual(options.map((option) => option.id), participantOrder);
 });
 
 test("investigation evaluates the observer function after the nominated function", () => {

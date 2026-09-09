@@ -1,12 +1,17 @@
 import { weightedChoice } from "./probability.js";
+import { shuffle } from "./functions.js";
 
 /** 人狼が開始時点で知っている「市民側の関数の種類」の一覧。 */
 export function knownFunctionOptions(game) {
-  const options = new Map();
-  for (const player of game.players.filter((candidate) => candidate.role !== "wolf")) {
-    options.set(player.baseFunction.id, { id: player.baseFunction.id, label: player.baseFunction.label });
+  if (!game.wolfFunctionOptions) {
+    const options = new Map();
+    for (const player of game.players.filter((candidate) => candidate.role !== "wolf")) {
+      options.set(player.baseFunction.id, { id: player.baseFunction.id, label: player.baseFunction.label });
+    }
+    // 最初の襲撃時だけ候補の表示順を無作為化し、参加者順から対応を推測できないようにする。
+    game.wolfFunctionOptions = shuffle([...options.values()], game.rng);
   }
-  return [...options.values()];
+  return game.wolfFunctionOptions.map((option) => ({ ...option }));
 }
 
 function chooseFunctionGuess(game, options) {

@@ -100,13 +100,19 @@ export function createViews({ state }) {
     return `<div class="action-card"><span class="private-role">元の人狼</span><h3>${escapeHtml(target.name)}の関数を推測</h3><p>この推測が的中した場合だけ、対象の関数に W が合成されます。</p><div class="condition-box"><div class="condition-label">SELECTED TARGET</div><div class="condition-value">${escapeHtml(target.name)}</div></div><div class="target-grid function-targets">${options.map((option) => `<button class="target-button" data-attack-function="${escapeHtml(option.id)}">${escapeHtml(option.label)}</button>`).join("")}</div><div class="action-buttons"><button class="secondary-button" id="cancel-attack-target">対象を選び直す</button></div></div>`;
   }
 
-  function nightResultView() { return `<div class="action-card"><span class="private-role">SECRET COMPOSITION</span><h3>夜が明けた</h3><p>人狼の襲撃処理が完了しました。関数の推測が的中した場合だけ、対象の関数に W が秘密裏に合成されます。対象者自身には変化が分かりません。</p><div class="result-value">Fᵢ′ = W ∘ Fᵢ（的中時のみ）</div><div class="action-buttons">${state.game.isHost ? `<button class="primary-button" id="next-round">ROUND ${state.game.round + 1}へ</button>` : `<span class="waiting-note">部屋主が次のラウンドを開始します</span>`}</div></div>`; }
+  function nightResultView() {
+    const privateResult = state.attackResult
+      ? `<div class="condition-box"><div class="condition-label">YOUR ATTACK RESULT</div><div class="condition-value">${state.attackResult.success ? "成功：関数の推測が的中しました。" : "失敗：関数の推測が外れました。"}</div></div>`
+      : "";
+    return `<div class="action-card"><span class="private-role">SECRET COMPOSITION</span><h3>夜が明けた</h3><p>人狼の襲撃処理が完了しました。関数の推測が的中した場合だけ、対象の関数に W が秘密裏に合成されます。対象者自身には変化が分かりません。</p>${privateResult}<div class="result-value">Fᵢ′ = W ∘ Fᵢ（的中時のみ）</div><div class="action-buttons">${state.game.isHost ? `<button class="primary-button" id="next-round">ROUND ${state.game.round + 1}へ</button>` : `<span class="waiting-note">部屋主が次のラウンドを開始します</span>`}</div></div>`;
+  }
 
   function outcomeModal() {
     const outcome = state.game.outcome;
     if (!outcome) return "";
     const reveal = (state.game.reveal ?? []).map((player) => `<div class="outcome-person"><b>${escapeHtml(player.name)}</b><span>${player.role === "wolf" ? "元の人狼" : player.infected ? "襲撃済み市民" : "市民"}<br>${escapeHtml(player.functionLabel)}</span></div>`).join("");
-    return `<div class="modal-backdrop"><div class="modal"><div class="modal-icon">${outcome.winner === "citizen" ? "∴" : "W"}</div><div class="eyebrow">Protocol concluded</div><h2>${outcome.winner === "citizen" ? "市民側の勝利" : "人狼側の勝利"}</h2><p>${escapeHtml(outcome.reason)}</p><div class="outcome-reveal">${reveal}</div><p class="waiting-note">部屋を退出すると、別の部屋に参加できます。</p><button class="primary-button" id="leave-room">部屋を退出</button></div></div>`;
+    const attackResult = state.attackResult ? `<p class="condition-value">今回の襲撃：${state.attackResult.success ? "成功" : "失敗"}</p>` : "";
+    return `<div class="modal-backdrop"><div class="modal"><div class="modal-icon">${outcome.winner === "citizen" ? "∴" : "W"}</div><div class="eyebrow">Protocol concluded</div><h2>${outcome.winner === "citizen" ? "市民側の勝利" : "人狼側の勝利"}</h2><p>${escapeHtml(outcome.reason)}</p>${attackResult}<div class="outcome-reveal">${reveal}</div><p class="waiting-note">部屋を退出すると、別の部屋に参加できます。</p><button class="primary-button" id="leave-room">部屋を退出</button></div></div>`;
   }
 
   function rightPanel() {

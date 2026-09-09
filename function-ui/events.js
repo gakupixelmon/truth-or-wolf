@@ -10,7 +10,7 @@ export function bindEvents({ state, socket, render }) {
     event.preventDefault(); state.error = null; socket.emit("room:join", formValues(event.currentTarget));
   });
   document.querySelector("#leave-room")?.addEventListener("click", () => {
-    socket.emit("room:leave"); state.room = null; state.game = null; state.privateAction = null; state.observation = null; state.nightTargetId = null; render();
+    socket.emit("room:leave"); state.room = null; state.game = null; state.privateAction = null; state.observation = null; state.attackResult = null; state.nightTargetId = null; render();
   });
   document.querySelector("#start-online-game")?.addEventListener("click", () => socket.emit("room:start"));
   document.querySelector("#begin-vote")?.addEventListener("click", () => socket.emit("game:begin-vote"));
@@ -38,10 +38,11 @@ export function bindSocketEvents({ state, socket, render }) {
   socket.on("game:state", (game) => {
     const keepPrivateAction = state.game?.phase === game.phase && state.privateAction?.playerId === game.myPlayerId && !game.submitted;
     state.game = game;
-    if (!keepPrivateAction) { state.privateAction = null; state.observation = null; state.nightTargetId = null; }
+    if (!keepPrivateAction) { state.privateAction = null; state.observation = null; state.attackResult = null; state.nightTargetId = null; }
     state.error = null; render();
   });
-  socket.on("game:private", (action) => { state.privateAction = action; state.observation = null; state.nightTargetId = null; render(); });
+  socket.on("game:private", (action) => { state.privateAction = action; state.observation = null; state.attackResult = null; state.nightTargetId = null; render(); });
   socket.on("game:observation", (observation) => { state.observation = observation; render(); });
+  socket.on("game:attack-result", (result) => { state.attackResult = result; render(); });
   socket.on("room:error", ({ message }) => { state.error = message; render(); });
 }

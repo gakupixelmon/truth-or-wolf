@@ -305,10 +305,15 @@ function beginNight(room) {
 }
 
 function finishNight(room, targetId, functionId) {
-  room.game.resolveNight(targetId, functionId);
+  const result = room.game.resolveNight(targetId, functionId);
   room.phase = room.game.outcome ? "ended" : "night-result";
   room.activePlayerId = null;
   sendGameState(room);
+  const wolf = room.game.wolf;
+  const member = room.members.find((entry) => entry.playerId === wolf?.id);
+  if (member && result) {
+    io.to(member.socketId).emit("game:attack-result", { success: result.success });
+  }
 }
 
 function memberCanAct(room, socket, expectedPhase) {
