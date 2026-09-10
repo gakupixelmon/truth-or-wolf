@@ -349,6 +349,17 @@ function removeMember(room, socketId) {
   if (room.members.length) sendRoomState(room);
 }
 
+function startRoomGame(room) {
+  room.game = new FunctionWolfGame({ humanCount: room.members.length, playerCount: room.playerCount });
+  room.members.forEach((member, index) => {
+    const player = room.game.players[index];
+    player.name = member.name;
+    member.playerId = player.id;
+  });
+  beginInvestigation(room);
+  sendRoomState(room);
+}
+
 io.on("connection", (socket) => {
   socket.on("room:create", ({ name, password, playerCount } = {}) => {
     if (getRoom(socket)) return sendError(socket, "すでに部屋に参加しています。");
@@ -396,18 +407,36 @@ io.on("connection", (socket) => {
     socket.data.roomCode = null;
   });
 
+  socket.on("room:set-player-count", ({ playerCount } = {}) => {
+    const room = getRoom(socket);
+    if (!room || room.hostSocketId !== socket.id) return sendError(socket, "部屋の作成者だけが人数を変更できます。");
+    if (room.game && room.phase !== "ended") return sendError(socket, "ゲーム中は人数を変更できません。");
+    const totalPlayerCount = parsePlayerCount(playerCount);
+    if (totalPlayerCount === null) return sendError(socket, `人数は${MIN_PLAYER_COUNT}〜${MAX_PLAYER_COUNT}人で指定してください。`);
+    if (room.members.length > totalPlayerCount) return sendError(socket, "現在の参加者数より少ない人数には変更できません。");
+    room.playerCount = totalPlayerCount;
+    sendRoomState(room);
+    if (room.game) sendGameState(room);
+  });
+
   socket.on("room:start", () => {
     const room = getRoom(socket);
     if (!room || room.hostSocketId !== socket.id) return sendError(socket, "部屋の作成者だけが開始できます。");
     if (room.game) return;
-    room.game = new FunctionWolfGame({ humanCount: room.members.length, playerCount: room.playerCount });
-    room.members.forEach((member, index) => {
-      const player = room.game.players[index];
-      player.name = member.name;
-      member.playerId = player.id;
-    });
-    beginInvestigation(room);
-    sendRoomState(room);
+    startRoomGame(room);
+  });
+
+  socket.on("room:restart", ({ playerCount } = {}) => {
+    const room = getRoom(socket);
+    if (!room || room.hostSocketId !== socket.id) return sendError(socket, "部屋の作成者だけが再戦を開始できます。");
+    if (!room.game || room.phase !== "ended") return sendError(socket, "ゲーム終了後に再戦できます。");
+    if (playerCount !== undefined) {
+      const totalPlayerCount = parsePlayerCount(playerCount);
+      if (totalPlayerCount === null) return sendError(socket, `人数は${MIN_PLAYER_COUNT}〜${MAX_PLAYER_COUNT}人で指定してください。`);
+      if (room.members.length > totalPlayerCount) return sendError(socket, "現在の参加者数より少ない人数には変更できません。");
+      room.playerCount = totalPlayerCount;
+    }
+    startRoomGame(room);
   });
 
   socket.on("game:investigate", ({ targetId } = {}) => {
