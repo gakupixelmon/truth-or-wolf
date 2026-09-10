@@ -17,6 +17,12 @@
 .room-members { display: grid; gap: 6px; margin: 8px 0; text-align: left; }
 .room-member { display: flex; justify-content: space-between; gap: 10px; padding: 10px 12px; border: 1px solid var(--line-soft); background: #141210; font-size: 11px; }
 .room-member small { color: var(--muted); font-size: 8px; }
+.room-share-list { display: grid; gap: 8px; margin: 4px 0 8px; }
+.room-share-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border: 1px solid var(--line-soft); background: #141210; text-align: left; }
+.room-share-row span { display: grid; gap: 3px; min-width: 0; }
+.room-share-row small { color: var(--muted); font-size: 8px; letter-spacing: .12em; }
+.room-share-row b { overflow-wrap: anywhere; font-family: var(--mono); font-size: 15px; letter-spacing: .08em; }
+.copy-button { flex: 0 0 auto; padding: 8px 12px; }
 .waiting-note { color: var(--muted); font-size: 10px; line-height: 1.7; }
 .waiting-card { text-align: center; }
 .formula-stack { padding: 27px 0; text-align: center; }
