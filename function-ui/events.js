@@ -26,7 +26,7 @@ export function bindEvents({ state, socket, render }) {
     event.preventDefault(); state.error = null; socket.emit("room:join", formValues(event.currentTarget));
   });
   document.querySelector("#leave-room")?.addEventListener("click", () => {
-    socket.emit("room:leave"); state.room = null; state.game = null; state.privateAction = null; state.observation = null; state.attackResult = null; state.nightTargetId = null; render();
+    socket.emit("room:leave"); state.room = null; state.game = null; state.privateAction = null; state.myFunction = null; state.observation = null; state.attackResult = null; state.nightTargetId = null; render();
   });
   document.querySelector("#start-online-game")?.addEventListener("click", () => socket.emit("room:start"));
   document.querySelector("#begin-vote")?.addEventListener("click", () => socket.emit("game:begin-vote"));
@@ -60,14 +60,19 @@ export function bindEvents({ state, socket, render }) {
 export function bindSocketEvents({ state, socket, render }) {
   socket.on("connect", () => { state.connected = true; state.error = null; render(); });
   socket.on("disconnect", () => { state.connected = false; state.error = "サーバーとの接続が切れました。再読み込みしてください。"; render(); });
-  socket.on("room:update", (room) => { state.room = room; if (room.status === "lobby") state.game = null; state.error = null; render(); });
+  socket.on("room:update", (room) => { state.room = room; if (room.status === "lobby") { state.game = null; state.myFunction = null; } state.error = null; render(); });
   socket.on("game:state", (game) => {
     const keepPrivateAction = state.game?.phase === game.phase && state.privateAction?.playerId === game.myPlayerId && !game.submitted;
     state.game = game;
     if (!keepPrivateAction) { state.privateAction = null; state.observation = null; state.attackResult = null; state.nightTargetId = null; }
     state.error = null; render();
   });
-  socket.on("game:private", (action) => { state.privateAction = action; state.observation = null; state.attackResult = null; state.nightTargetId = null; render(); });
+  socket.on("game:private", (action) => {
+    state.privateAction = action;
+    // 自分の関数は届いたタイミングでキャッシュし、投票などその後のフェーズでも左パネルに表示し続ける
+    if (action.function) state.myFunction = action.function;
+    state.observation = null; state.attackResult = null; state.nightTargetId = null; render();
+  });
   socket.on("game:observation", (observation) => { state.observation = observation; render(); });
   socket.on("game:attack-result", (result) => { state.attackResult = result; render(); });
   socket.on("room:error", ({ message }) => { state.error = message; render(); });

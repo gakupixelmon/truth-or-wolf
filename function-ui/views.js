@@ -28,10 +28,12 @@ export function createViews({ state }) {
 
   function functionPlayer(player) {
     const mine = state.game.myPlayerId === player.id;
-    // 自分の場合で、かつ秘密情報（privateAction）が届いていれば関数名を表示する
+    // 自分の場合で、かつ関数情報（myFunction）が届いていれば関数名を表示する。
+    // privateAction は投票フェーズなどで関数情報を含まないターンに上書きされるため、
+    // 一度届いた自分の関数は myFunction に保持しておく。
     let expression = `F${player.id.slice(1)}(x) = ?`;
-    if (mine && state.privateAction && state.privateAction.function) {
-      expression = escapeHtml(state.privateAction.function.label);
+    if (mine && state.myFunction) {
+      expression = escapeHtml(state.myFunction.label);
     } else if (mine && player.baseFunction) {
       // チュートリアル用のフォールバック
       expression = escapeHtml(player.baseFunction.label);

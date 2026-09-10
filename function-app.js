@@ -10,6 +10,7 @@ const state = {
   room: null,
   game: null,
   privateAction: null,
+  myFunction: null,
   nightTargetId: null,
   observation: null,
   attackResult: null,
