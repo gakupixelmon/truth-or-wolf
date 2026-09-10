@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { randomInt } from "node:crypto";
 import { Server } from "socket.io";
 import { FunctionWolfGame } from "./function-game.js";
+import { DEFAULT_PLAYER_COUNT, MAX_PLAYER_COUNT, MIN_PLAYER_COUNT } from "./rules/constants.js";
 
 const host = process.env.HOST || "0.0.0.0";
 const port = Number(process.env.PORT || 4173);
@@ -51,6 +52,11 @@ const rooms = new Map();
 
 function cleanText(value, fallback = "") {
   return String(value ?? fallback).trim().slice(0, 24);
+}
+
+function parsePlayerCount(value) {
+  const count = Number(value);
+  return Number.isInteger(count) && count >= MIN_PLAYER_COUNT && count <= MAX_PLAYER_COUNT ? count : null;
 }
 
 function makeRoomCode() {
@@ -143,6 +149,7 @@ function gameState(room, socketId) {
     submitted,
     myPlayerId: member?.playerId ?? null,
     isHost: member?.socketId === room.hostSocketId,
+    playerCount: game.players.length,
   };
 }
 
@@ -152,6 +159,7 @@ function roomState(room, socketId) {
     code: room.code,
     // パスワードは部屋作成者本人にだけ返す。
     password: member?.socketId === room.hostSocketId ? room.password : null,
+    playerCount: room.playerCount,
     status: room.game ? "playing" : "lobby",
     isHost: member?.socketId === room.hostSocketId,
     players: room.members.map((entry) => ({
@@ -342,12 +350,14 @@ function removeMember(room, socketId) {
 }
 
 io.on("connection", (socket) => {
-  socket.on("room:create", ({ name, password } = {}) => {
+  socket.on("room:create", ({ name, password, playerCount } = {}) => {
     if (getRoom(socket)) return sendError(socket, "すでに部屋に参加しています。");
     const playerName = cleanText(name, "プレイヤー");
+    const totalPlayerCount = parsePlayerCount(playerCount) ?? DEFAULT_PLAYER_COUNT;
     const room = {
       code: makeRoomCode(),
       password: String(password ?? "").slice(0, 64),
+      playerCount: totalPlayerCount,
       hostSocketId: socket.id,
       members: [{ socketId: socket.id, playerId: null, name: playerName }],
       game: null,
@@ -371,7 +381,7 @@ io.on("connection", (socket) => {
     if (!room) return sendError(socket, "部屋が見つかりません。");
     if (room.password !== String(password ?? "").slice(0, 64)) return sendError(socket, "パスワードが違います。");
     if (room.game) return sendError(socket, "この部屋のゲームはすでに始まっています。");
-    if (room.members.length >= 7) return sendError(socket, "この部屋は満員です。");
+    if (room.members.length >= room.playerCount) return sendError(socket, "この部屋は満員です。");
     room.members.push({ socketId: socket.id, playerId: null, name: cleanText(name, "プレイヤー") });
     socket.join(room.code);
     socket.data.roomCode = room.code;
@@ -390,7 +400,7 @@ io.on("connection", (socket) => {
     const room = getRoom(socket);
     if (!room || room.hostSocketId !== socket.id) return sendError(socket, "部屋の作成者だけが開始できます。");
     if (room.game) return;
-    room.game = new FunctionWolfGame({ humanCount: room.members.length });
+    room.game = new FunctionWolfGame({ humanCount: room.members.length, playerCount: room.playerCount });
     room.members.forEach((member, index) => {
       const player = room.game.players[index];
       player.name = member.name;

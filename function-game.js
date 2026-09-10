@@ -1,4 +1,4 @@
-import { INPUT_COUNT, FUNCTION_NAMES, PLAYER_COUNT, PHASES } from "./rules/constants.js";
+import { DEFAULT_PLAYER_COUNT, INPUT_COUNT, FUNCTION_NAMES, MAX_PLAYER_COUNT, MIN_PLAYER_COUNT, PHASES } from "./rules/constants.js";
 import { buildBalancedFunctions } from "./rules/functions.js";
 import { investigate, publishReport, runCpuInvestigations, updateSuspicion } from "./rules/investigation.js";
 import { resolveVotes } from "./rules/voting.js";
@@ -9,16 +9,23 @@ export { INPUT_COUNT, FUNCTION_NAMES } from "./rules/constants.js";
 
 /** ゲーム状態の保持を担当するファサード。ルール本体は rules/ 以下に分離。 */
 export class FunctionWolfGame {
-  constructor({ humanCount = 1, rng = Math.random } = {}) {
+  constructor({ humanCount = 1, playerCount = DEFAULT_PLAYER_COUNT, rng = Math.random } = {}) {
+    if (!Number.isInteger(playerCount) || playerCount < MIN_PLAYER_COUNT || playerCount > MAX_PLAYER_COUNT) {
+      throw new Error(`playerCount must be between ${MIN_PLAYER_COUNT} and ${MAX_PLAYER_COUNT}`);
+    }
+    if (!Number.isInteger(humanCount) || humanCount < 0 || humanCount > playerCount) {
+      throw new Error(`humanCount must be between 0 and ${playerCount}`);
+    }
     this.rng = rng;
     this.round = 1;
+    this.playerCount = playerCount;
     this.phase = PHASES.INVESTIGATION;
-    const wolfIndex = Math.floor(rng() * PLAYER_COUNT);
-    const setup = buildBalancedFunctions(wolfIndex, rng);
+    const wolfIndex = Math.floor(rng() * playerCount);
+    const setup = buildBalancedFunctions(wolfIndex, rng, playerCount);
     this.omega = setup.wolfFunction;
-    this.players = FUNCTION_NAMES.map((defaultName, index) => ({
+    this.players = Array.from({ length: playerCount }, (_, index) => ({
       id: `p${index}`,
-      name: index < humanCount ? (humanCount === 1 ? "あなた" : `プレイヤー${index + 1}`) : defaultName,
+      name: index < humanCount ? (humanCount === 1 ? "あなた" : `プレイヤー${index + 1}`) : FUNCTION_NAMES[index] ?? `CPU${index + 1}`,
       human: index < humanCount,
       role: index === wolfIndex ? "wolf" : "citizen",
       infected: false,

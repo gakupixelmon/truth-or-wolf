@@ -12,6 +12,7 @@
 .room-form { display: grid; gap: 9px; padding: 18px; border: 1px solid var(--line); background: rgba(23,20,18,.8); }
 .room-form input { width: 100%; min-height: 42px; padding: 0 11px; border: 1px solid var(--line); background: #12100f; color: var(--ink); }
 .room-form input::placeholder { color: var(--dim); }
+.field-label { color: var(--muted); font-size: 10px; letter-spacing: .08em; }
 .room-form .primary-button, .room-form .secondary-button { margin-top: 4px; }
 .room-error { margin: 14px 0; padding: 11px 13px; border: 1px solid var(--red-deep); color: var(--red-hot); background: rgba(116,45,40,.15); font-size: 11px; }
 .room-lobby { display: grid; gap: 14px; }
