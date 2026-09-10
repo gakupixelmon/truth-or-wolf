@@ -26,6 +26,11 @@
 .room-share-row small { color: var(--muted); font-size: 8px; letter-spacing: .12em; }
 .room-share-row b { overflow-wrap: anywhere; font-family: var(--mono); font-size: 15px; letter-spacing: .08em; }
 .copy-button { flex: 0 0 auto; padding: 8px 12px; }
+.room-settings { display: grid; gap: 6px; padding: 10px 12px; border: 1px solid var(--line-soft); background: #141210; text-align: left; }
+.room-settings-row { display: flex; gap: 8px; }
+.room-settings-row input { min-width: 0; flex: 1; padding: 0 10px; border: 1px solid var(--line); background: #12100f; color: var(--ink); }
+.room-settings-row button { flex: 0 0 auto; }
+.outcome-restart { margin: 12px 0; }
 .waiting-note { color: var(--muted); font-size: 10px; line-height: 1.7; }
 .waiting-card { text-align: center; }
 .formula-stack { padding: 27px 0; text-align: center; }
@@ -172,6 +177,7 @@
   .report-formula { font-size: 13px; overflow-wrap: anywhere; }
   .room-lobby { width: min(100%, 430px); padding: 24px 16px; }
   .room-lobby button:not(.copy-button) { width: 100%; min-height: 48px; }
+  .room-settings-row button { width: auto !important; }
   .room-share-row { flex-wrap: wrap; }
   .room-share-row span { flex: 1 1 auto; }
   .room-share-row b { word-break: break-all; }

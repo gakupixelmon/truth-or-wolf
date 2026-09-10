@@ -29,6 +29,13 @@ export function bindEvents({ state, socket, render }) {
     socket.emit("room:leave"); state.room = null; state.game = null; state.privateAction = null; state.myFunction = null; state.observation = null; state.attackResult = null; state.nightTargetId = null; render();
   });
   document.querySelector("#start-online-game")?.addEventListener("click", () => socket.emit("room:start"));
+  document.querySelector("#room-player-count-form")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    socket.emit("room:set-player-count", { playerCount: event.currentTarget.elements.playerCount.value });
+  });
+  document.querySelector("#restart-room")?.addEventListener("click", () => {
+    socket.emit("room:restart", { playerCount: document.querySelector("#restart-player-count")?.value });
+  });
   document.querySelector("#begin-vote")?.addEventListener("click", () => socket.emit("game:begin-vote"));
   document.querySelector("#begin-night")?.addEventListener("click", () => socket.emit("game:begin-night"));
   document.querySelector("#next-round")?.addEventListener("click", () => socket.emit("game:next-round"));
