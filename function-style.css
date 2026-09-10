@@ -1,5 +1,5 @@
 .function-hero h1 { font-size: clamp(43px, 7vw, 86px); }
-.tutorial-select { position: absolute; top: 88px; right: 16px; z-index: 10; display: flex; flex-direction: column; gap: 6px; align-items: flex-end; }
+.tutorial-select { display: flex; justify-content: flex-end; gap: 6px; padding: 14px clamp(18px, 4vw, 60px) 0; }
 .tutorial-select button { font-size: 12px; padding: 6px 12px; }
 .mode-link { color: var(--muted); font-size: 11px; text-decoration: none; border-bottom: 1px solid var(--line); padding-bottom: 3px; }
 .mode-link:hover { color: var(--ink); border-color: var(--red); }
@@ -133,7 +133,7 @@
   .status-line b { font-size: 10px; }
   .hero { min-height: auto; padding: 34px 16px 48px; gap: 24px; }
   .function-hero h1 { font-size: clamp(42px, 15vw, 64px); }
-  .tutorial-select { position: static; flex-direction: row; flex-wrap: wrap; align-items: stretch; padding: 10px 14px 0; gap: 8px; }
+  .tutorial-select { flex-wrap: wrap; align-items: stretch; padding: 10px 14px 0; gap: 8px; }
   .tutorial-select button { flex: 1; min-height: 40px; white-space: nowrap; }
   .hero-copy { font-size: 14px; line-height: 1.8; }
   .room-forms { grid-template-columns: 1fr; gap: 10px; margin-top: 20px; }
