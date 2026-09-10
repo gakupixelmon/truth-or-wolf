@@ -17,6 +17,7 @@ const state = {
   humanVotes: new Map(),
   voteResult: null,
   tutorialMode: false,
+  tutorialRole: null,
   tutorialStep: "",
   error: null,
 };

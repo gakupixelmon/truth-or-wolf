@@ -34,7 +34,8 @@ export function bindEvents({ state, socket, render }) {
   document.querySelector("#next-round")?.addEventListener("click", () => socket.emit("game:next-round"));
   document.querySelectorAll("[data-investigate]").forEach((button) => button.addEventListener("click", () => socket.emit("game:investigate", { targetId: button.dataset.investigate })));
   document.querySelectorAll("[data-publish]").forEach((button) => button.addEventListener("click", () => { socket.emit("game:publish", { mode: button.dataset.publish }); state.observation = null; }));
-  document.querySelector("#start-tutorial")?.addEventListener("click", () => { state.tutorialMode = true; state.game = null; render(); });
+  document.querySelector("#start-tutorial-citizen")?.addEventListener("click", () => { state.tutorialMode = true; state.tutorialRole = "citizen"; state.game = null; render(); });
+  document.querySelector("#start-tutorial-wolf")?.addEventListener("click", () => { state.tutorialMode = true; state.tutorialRole = "wolf"; state.game = null; render(); });
   document.querySelectorAll("[data-vote]").forEach((button) => button.addEventListener("click", () => socket.emit("game:vote", { choice: button.dataset.vote })));
   document.querySelectorAll("[data-copy-value]").forEach((button) => button.addEventListener("click", async () => {
     const originalLabel = button.textContent;
