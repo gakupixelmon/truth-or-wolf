@@ -30,7 +30,7 @@ export function functionSignature(fn) {
 
 export function makeFunctionLibrary() {
   const functions = [];
-  for (const [a, b] of [[1, -6], [1, -2], [1, 1], [1, 5], [2, -8], [2, 1], [-1, 6], [-1, 2], [-2, 10], [-2, 3]]) {
+  for (const [a, b] of [[1, -6], [1, -2], [1, 0], [1, 1], [1, 5], [2, -8], [2, 1], [-1, 6], [-1, 2], [-2, 10], [-2, 3]]) {
     functions.push(makeFunction(`linear-${a}-${b}`, `f(x) = ${signedCoefficient(a, "x")}${appendSignedTerm(b)}`, "一次関数", (x) => a * x + b));
   }
   for (const [a, b, c] of [[1, 0, -8], [1, 1, -6], [1, -1, 4], [2, 0, -10], [2, 1, -5], [-1, 0, 8], [-1, 2, 3]]) {
@@ -62,7 +62,9 @@ export function buildBalancedFunctions(wolfIndex, rng, playerCount = PLAYER_COUN
   }
   let fallback = null;
   for (let attempt = 0; attempt < 6000; attempt += 1) {
-    const wolfFunction = library[Math.floor(rng() * library.length)];
+    const identityFunction = library.find((candidate) => candidate.id === "linear-1-0");
+    const wolfCandidates = library.filter((candidate) => candidate.id !== identityFunction.id);
+    const wolfFunction = wolfCandidates[Math.floor(rng() * wolfCandidates.length)];
     const wolfSignature = functionSignature(wolfFunction);
     const uniqueCitizens = [];
     const seen = new Set([wolfSignature]);
@@ -72,7 +74,8 @@ export function buildBalancedFunctions(wolfIndex, rng, playerCount = PLAYER_COUN
       seen.add(signature);
       uniqueCitizens.push(candidate);
     }
-    const citizens = uniqueCitizens.slice(0, playerCount - 1);
+    const otherCitizens = uniqueCitizens.filter((candidate) => candidate.id !== identityFunction.id).slice(0, playerCount - 2);
+    const citizens = shuffle([identityFunction, ...otherCitizens], rng);
     const functions = [];
     let citizenIndex = 0;
     for (let index = 0; index < playerCount; index += 1) {

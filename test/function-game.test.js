@@ -28,6 +28,18 @@ test("function mode supports configurable total player counts", () => {
   }
 });
 
+test("the identity function y = x is assigned to exactly one citizen", () => {
+  for (let count = 4; count <= 12; count += 1) {
+    for (let seed = 1; seed <= 10; seed += 1) {
+      const game = new FunctionWolfGame({ playerCount: count, humanCount: 1, rng: seeded(count * 100 + seed) });
+      const identityPlayers = game.players.filter((player) => player.baseFunction.id === "linear-1-0");
+      assert.equal(identityPlayers.length, 1);
+      assert.equal(identityPlayers[0].role, "citizen");
+      assert.equal(identityPlayers[0].baseFunction.label, "f(x) = x");
+    }
+  }
+});
+
 test("each citizen test has false positives but all tests together isolate the wolf", () => {
   for (let seed = 1; seed <= 100; seed += 1) {
     const game = new FunctionWolfGame({ rng: seeded(seed) });
