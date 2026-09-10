@@ -19,6 +19,15 @@ test("function mode supports one to seven local human players", () => {
   }
 });
 
+test("function mode supports configurable total player counts", () => {
+  for (let count = 4; count <= 12; count += 1) {
+    const game = new FunctionWolfGame({ playerCount: count, humanCount: 1, rng: seeded(count + 100) });
+    assert.equal(game.players.length, count);
+    assert.equal(game.playerCount, count);
+    assert.equal(game.players.filter((player) => player.role === "wolf").length, 1);
+  }
+});
+
 test("each citizen test has false positives but all tests together isolate the wolf", () => {
   for (let seed = 1; seed <= 100; seed += 1) {
     const game = new FunctionWolfGame({ rng: seeded(seed) });
