@@ -146,6 +146,14 @@ test("a unanimous no-exile vote removes nobody", () => {
   assert.equal(game.alivePlayers().length, 7);
 });
 
+test("the latest vote result remains available after advancing a round", () => {
+  const game = new FunctionWolfGame({ humanCount: 7, rng: seeded(38) });
+  const votes = new Map(game.players.map((player) => [player.id, "none"]));
+  const result = game.resolveVotes(votes);
+  game.startNextRound();
+  assert.equal(game.lastVote, result);
+});
+
 test("CPU observations update private suspicion without exposing infection", () => {
   const game = new FunctionWolfGame({ humanCount: 1, rng: seeded(45) });
   const pair = game.players

@@ -94,7 +94,6 @@ export class FunctionWolfGame {
   startNextRound() {
     this.round += 1;
     this.phase = PHASES.INVESTIGATION;
-    this.lastVote = null;
     this.lastAttack = null;
   }
 }

@@ -115,7 +115,8 @@ export function createViews({ state }) {
     if (!outcome) return "";
     const reveal = (state.game.reveal ?? []).map((player) => `<div class="outcome-person"><b>${escapeHtml(player.name)}</b><span>${player.role === "wolf" ? "元の人狼" : player.infected ? "襲撃済み市民" : "市民"}<br>${escapeHtml(player.functionLabel)}</span></div>`).join("");
     const attackResult = state.attackResult ? `<p class="condition-value">今回の襲撃：${state.attackResult.success ? "成功" : "失敗"}</p>` : "";
-    return `<div class="modal-backdrop"><div class="modal"><div class="modal-icon">${outcome.winner === "citizen" ? "∴" : "W"}</div><div class="eyebrow">Protocol concluded</div><h2>${outcome.winner === "citizen" ? "市民側の勝利" : "人狼側の勝利"}</h2><p>${escapeHtml(outcome.reason)}</p>${attackResult}<div class="outcome-reveal">${reveal}</div><p class="waiting-note">部屋を退出すると、別の部屋に参加できます。</p><button class="primary-button" id="leave-room">部屋を退出</button></div></div>`;
+    const finalVote = state.game.voteResult ? `<section class="outcome-vote"><div class="panel-kicker">FINAL VOTE</div><h3>最終投票結果</h3>${tallyMarkup(state.game.voteResult)}</section>` : "";
+    return `<div class="modal-backdrop"><div class="modal"><div class="modal-icon">${outcome.winner === "citizen" ? "∴" : "W"}</div><div class="eyebrow">Protocol concluded</div><h2>${outcome.winner === "citizen" ? "市民側の勝利" : "人狼側の勝利"}</h2><p>${escapeHtml(outcome.reason)}</p>${attackResult}${finalVote}<div class="outcome-reveal">${reveal}</div><p class="waiting-note">部屋を退出すると、別の部屋に参加できます。</p><button class="primary-button" id="leave-room">部屋を退出</button></div></div>`;
   }
 
   function rightPanel() {
