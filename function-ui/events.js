@@ -2,6 +2,22 @@ function formValues(form) {
   return Object.fromEntries(new FormData(form).entries());
 }
 
+async function copyToClipboard(value) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value);
+    return;
+  }
+  const textarea = document.createElement("textarea");
+  textarea.value = value;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand("copy");
+  textarea.remove();
+}
+
 export function bindEvents({ state, socket, render }) {
   document.querySelector("#create-room-form")?.addEventListener("submit", (event) => {
     event.preventDefault(); state.error = null; socket.emit("room:create", formValues(event.currentTarget));
@@ -20,6 +36,16 @@ export function bindEvents({ state, socket, render }) {
   document.querySelectorAll("[data-publish]").forEach((button) => button.addEventListener("click", () => { socket.emit("game:publish", { mode: button.dataset.publish }); state.observation = null; }));
   document.querySelector("#start-tutorial")?.addEventListener("click", () => { state.tutorialMode = true; state.game = null; render(); });
   document.querySelectorAll("[data-vote]").forEach((button) => button.addEventListener("click", () => socket.emit("game:vote", { choice: button.dataset.vote })));
+  document.querySelectorAll("[data-copy-value]").forEach((button) => button.addEventListener("click", async () => {
+    const originalLabel = button.textContent;
+    try {
+      await copyToClipboard(button.dataset.copyValue ?? "");
+      button.textContent = "コピー済み";
+    } catch {
+      button.textContent = "コピー失敗";
+    }
+    window.setTimeout(() => { button.textContent = originalLabel; }, 1500);
+  }));
   document.querySelectorAll("[data-attack-target]").forEach((button) => button.addEventListener("click", () => {
     state.nightTargetId = button.dataset.attackTarget;
     render();

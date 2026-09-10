@@ -150,6 +150,8 @@ function roomState(room, socketId) {
   const member = getMember(room, socketId);
   return {
     code: room.code,
+    // パスワードは部屋作成者本人にだけ返す。
+    password: member?.socketId === room.hostSocketId ? room.password : null,
     status: room.game ? "playing" : "lobby",
     isHost: member?.socketId === room.hostSocketId,
     players: room.members.map((entry) => ({
