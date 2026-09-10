@@ -219,9 +219,7 @@ function sendVoteTurns(room) {
     if (!member) continue;
     io.to(member.socketId).emit("game:private", {
       kind: "vote",
-      playerId: player.id,
-      name: player.name,
-      role: player.role,
+      ...privatePlayerData(room, player.id),
       targets: room.game.alivePlayers()
         .filter((target) => target.id !== player.id)
         .map((target) => ({ id: target.id, name: target.name })),

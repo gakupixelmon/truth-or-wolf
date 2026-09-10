@@ -15,7 +15,7 @@ export function createViews({ state }) {
   function errorMarkup() { return state.error ? `<div class="room-error">${escapeHtml(state.error)}</div>` : ""; }
 
   function setupScreen() {
-    return `<div class="shell">${header()}<button id="start-tutorial" class="primary-button" style="position: absolute; top: 88px; right: 16px; z-index: 10; font-size: 12px; padding: 6px 12px;">チュートリアルはこちら</button><main class="hero function-hero"><section><div class="eyebrow">Function composition × hidden infection</div><h1>部屋を作り、<br><em>推理する。</em></h1><p class="hero-copy">部屋コードとパスワードを共有して、離れた場所のプレイヤーと関数人狼を遊べます。ゲームの秘密情報はサーバーで管理され、各プレイヤーには自分の情報だけが届きます。</p>${errorMarkup()}<div class="room-forms"><form class="room-form" id="create-room-form"><div class="panel-kicker">CREATE ROOM</div><input name="name" maxlength="24" placeholder="あなたの名前" required><input name="password" type="password" maxlength="64" placeholder="パスワード" required><button class="primary-button" type="submit">部屋を作る</button></form><form class="room-form" id="join-room-form"><div class="panel-kicker">JOIN ROOM</div><input name="name" maxlength="24" placeholder="あなたの名前" required><input name="code" inputmode="numeric" maxlength="6" placeholder="6桁の部屋コード" required><input name="password" type="password" maxlength="64" placeholder="パスワード" required><button class="secondary-button" type="submit">部屋に入る</button></form></div></section><aside><div class="axiom-card"><div class="axiom-index">ONLINE / W</div><div class="formula-stack"><div class="main-equation">Tᵢ(j) = Obsᵢ(Fᵢ ∘ Fⱼ)</div><div class="sub-equation">Fwolf = W</div></div><div class="axiom-rule">1つの部屋に最大7人。足りない席はCPUが担当します。人狼関数Wは全員に公開されますが、個人関数と秘密条件は本人だけが知ります。</div><div class="feature-list"><div class="feature"><b>ルーム制</b>コードとパスワードで参加</div><div class="feature"><b>秘密情報</b>サーバーが個別に配信</div><div class="feature"><b>同時操作</b>全員が自分の端末から送信</div><div class="feature"><b>CPU補充</b>空席は自動で参加</div></div></div></aside></main></div>`;
+    return `<div class="shell">${header()}<div class="tutorial-select"><button id="start-tutorial-citizen" class="primary-button">市民チュートリアル</button><button id="start-tutorial-wolf" class="secondary-button">人狼チュートリアル</button></div><main class="hero function-hero"><section><div class="eyebrow">Function composition × hidden infection</div><h1>部屋を作り、<br><em>推理する。</em></h1><p class="hero-copy">部屋コードとパスワードを共有して、離れた場所のプレイヤーと関数人狼を遊べます。ゲームの秘密情報はサーバーで管理され、各プレイヤーには自分の情報だけが届きます。</p>${errorMarkup()}<div class="room-forms"><form class="room-form" id="create-room-form"><div class="panel-kicker">CREATE ROOM</div><input name="name" maxlength="24" placeholder="あなたの名前" required><input name="password" type="password" maxlength="64" placeholder="パスワード" required><button class="primary-button" type="submit">部屋を作る</button></form><form class="room-form" id="join-room-form"><div class="panel-kicker">JOIN ROOM</div><input name="name" maxlength="24" placeholder="あなたの名前" required><input name="code" inputmode="numeric" maxlength="6" placeholder="6桁の部屋コード" required><input name="password" type="password" maxlength="64" placeholder="パスワード" required><button class="secondary-button" type="submit">部屋に入る</button></form></div></section><aside><div class="axiom-card"><div class="axiom-index">ONLINE / W</div><div class="formula-stack"><div class="main-equation">Tᵢ(j) = Obsᵢ(Fᵢ ∘ Fⱼ)</div><div class="sub-equation">Fwolf = W</div></div><div class="axiom-rule">1つの部屋に最大7人。足りない席はCPUが担当します。人狼関数Wは全員に公開されますが、個人関数と秘密条件は本人だけが知ります。</div><div class="feature-list"><div class="feature"><b>ルーム制</b>コードとパスワードで参加</div><div class="feature"><b>秘密情報</b>サーバーが個別に配信</div><div class="feature"><b>同時操作</b>全員が自分の端末から送信</div><div class="feature"><b>CPU補充</b>空席は自動で参加</div></div></div></aside></main></div>`;
   }
 
   function lobbyScreen() {
@@ -28,10 +28,12 @@ export function createViews({ state }) {
 
   function functionPlayer(player) {
     const mine = state.game.myPlayerId === player.id;
-    // 自分の場合で、かつ秘密情報（privateAction）が届いていれば関数名を表示する
+    // 自分の場合で、かつ関数情報（myFunction）が届いていれば関数名を表示する。
+    // privateAction は投票フェーズなどで関数情報を含まないターンに上書きされるため、
+    // 一度届いた自分の関数は myFunction に保持しておく。
     let expression = `F${player.id.slice(1)}(x) = ?`;
-    if (mine && state.privateAction && state.privateAction.function) {
-      expression = escapeHtml(state.privateAction.function.label);
+    if (mine && state.myFunction) {
+      expression = escapeHtml(state.myFunction.label);
     } else if (mine && player.baseFunction) {
       // チュートリアル用のフォールバック
       expression = escapeHtml(player.baseFunction.label);
