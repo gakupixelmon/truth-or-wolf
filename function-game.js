@@ -95,7 +95,7 @@ export class FunctionWolfGame {
       .map((target) => target.id);
   }
 
-  investigate(observerId, targetId) { return investigate(this, observerId, targetId); }
+  investigate(observerId, targetId, targetSignOverride) { return investigate(this, observerId, targetId, targetSignOverride); }
   updateSuspicion(observerId, targetId, positive, trust = 1) { return updateSuspicion(this, observerId, targetId, positive, trust); }
   publishReport(report, published = true) { return publishReport(this, report, published); }
   runCpuInvestigations() { return runCpuInvestigations(this); }

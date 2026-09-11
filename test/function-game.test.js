@@ -93,6 +93,17 @@ test("every citizen obtains the configured ordinary sign when testing the origin
   }
 });
 
+test("a wolf can choose the target sign for a private observation", () => {
+  const game = new FunctionWolfGame({ humanCount: 7, rng: seeded(141) });
+  const wolf = game.wolf;
+  const target = game.players.find((player) => player.id !== wolf.id);
+  const chosenSign = wolf.condition.targetSign === "positive" ? "negative" : "positive";
+  const report = game.investigate(wolf.id, target.id, chosenSign);
+  assert.equal(report.condition.targetSign, chosenSign);
+  assert.equal(report.targetSign, chosenSign);
+  assert.equal(report.isMatch, report.observed.key === chosenSign);
+});
+
 test("the original wolf owns exactly the publicly announced wolf function", () => {
   const game = new FunctionWolfGame({ rng: seeded(6) });
   assert.equal(game.wolf.baseFunction.id, game.omega.id);

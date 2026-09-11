@@ -53,7 +53,7 @@ export function createViews({ state }) {
 
   function reportsMarkup() {
     if (!state.game.reports.length) return `<div class="report-empty">公開された観測結果はまだありません。</div>`;
-    return `<div class="reports">${[...state.game.reports].reverse().map((report) => `<div class="report"><div class="report-head"><span>ROUND ${report.round} · ${escapeHtml(report.observerName)} → ${escapeHtml(report.targetName)}</span><span>REPORT</span></div><div class="report-formula">F<sub>${escapeHtml(report.observerName)}</sub> ∘ F<sub>${escapeHtml(report.targetName)}</sub> の符号は${escapeHtml(report.reportedSign)}です。</div><div class="message-gloss">「私の合成演算の符号は ${escapeHtml(report.reportedSign)} だった」</div></div>`).join("")}</div>`;
+    return `<div class="reports">${[...state.game.reports].reverse().map((report) => { const targetSign = report.targetSign ?? report.condition?.targetSign; return `<div class="report"><div class="report-head"><span>ROUND ${report.round} · ${escapeHtml(report.observerName)} → ${escapeHtml(report.targetName)}</span><span>REPORT</span></div><div class="report-formula">目標符号は${escapeHtml(signText(targetSign))}、発表された合成符号は${escapeHtml(report.reportedSign)}です。</div><div class="message-gloss">「目標符号は ${escapeHtml(signText(targetSign))}、私の合成演算の符号は ${escapeHtml(report.reportedSign)} だった」</div></div>`; }).join("")}</div>`;
   }
 
   function waitingCard(title, body) { return `<div class="action-card waiting-card"><span class="private-role">WAITING</span><h3>${escapeHtml(title)}</h3><p>${escapeHtml(body)}</p><div class="result-value">接続中のプレイヤーの操作を待っています</div></div>`; }
@@ -67,7 +67,10 @@ export function createViews({ state }) {
     const action = state.privateAction;
     if (state.game.submitted) return waitingCard("観測を送信しました", "他のプレイヤーの観測が揃うまでお待ちください。");
     if (!action || action.kind !== "investigation" || action.playerId !== state.game.myPlayerId) return waitingCard("他のプレイヤーの観測中", "自分の観測を送信すると、他の人を待たずに待機できます。");
-    return `<div class="action-card"><span class="private-role">${action.role === "wolf" ? "元の人狼" : "市民"}</span><h3>あなたの秘密観測</h3><p>自分の関数を外側、指名相手の関数を内側として合成します。結果の符号だけを公開できます。目標符号は「${signText(action.condition.targetSign)}」です。</p>${privateFunctionMarkup(action)}<div class="condition-box"><div class="condition-label">YOUR TEST</div><div class="condition-value">${escapeHtml(action.condition.label)}</div></div><div class="target-grid function-targets">${action.targets.map((target) => `<button class="target-button" data-investigate="${escapeHtml(target.id)}">${escapeHtml(target.name)}<span class="function-mini">秘密関数</span></button>`).join("")}</div></div>`;
+    const signOptions = action.role === "wolf"
+      ? `<div class="condition-box"><div class="condition-label">TARGET SIGN TO ANNOUNCE</div><div class="condition-value">公開する目標符号を選択してください（現在：${escapeHtml(signText(state.targetSignChoice ?? action.condition.targetSign))}）</div><div class="target-grid sign-targets">${(action.targetSignOptions ?? []).map((sign) => `<button class="target-button ${(state.targetSignChoice ?? action.condition.targetSign) === sign ? "selected" : ""}" data-target-sign="${escapeHtml(sign)}">${escapeHtml(signText(sign))}<span class="function-mini">${sign === "positive" ? "+" : sign === "negative" ? "−" : "0"}</span></button>`).join("")}</div></div>`
+      : `<div class="condition-box"><div class="condition-label">YOUR TARGET SIGN</div><div class="condition-value">${escapeHtml(signText(action.condition.targetSign))}</div></div>`;
+    return `<div class="action-card"><span class="private-role">${action.role === "wolf" ? "元の人狼" : "市民"}</span><h3>あなたの秘密観測</h3><p>自分の関数を外側、指名相手の関数を内側として合成します。発表時には目標符号も公開されます。</p>${privateFunctionMarkup(action)}<div class="condition-box"><div class="condition-label">YOUR TEST</div><div class="condition-value">${escapeHtml(action.condition.label)}</div></div>${signOptions}<div class="target-grid function-targets">${action.targets.map((target) => `<button class="target-button" data-investigate="${escapeHtml(target.id)}">${escapeHtml(target.name)}<span class="function-mini">秘密関数</span></button>`).join("")}</div></div>`;
   }
 
   function observationView() {

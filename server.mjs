@@ -4,6 +4,7 @@ import { randomInt } from "node:crypto";
 import { Server } from "socket.io";
 import { FunctionWolfGame } from "./function-game.js";
 import { DEFAULT_PLAYER_COUNT, DEFAULT_RULES, MAX_PLAYER_COUNT, MAX_WOLF_COUNT, MIN_PLAYER_COUNT } from "./rules/constants.js";
+import { TARGET_SIGN_KEYS } from "./rules/investigation.js";
 
 const host = process.env.HOST || "0.0.0.0";
 const port = Number(process.env.PORT || 4173);
@@ -118,6 +119,7 @@ function publicReports(room) {
     observerName: report.observer.name,
     targetId: report.target.id,
     targetName: report.target.name,
+    targetSign: report.targetSign ?? report.condition.targetSign,
     reportedSign: report.reportedSign,
   }));
 }
@@ -229,6 +231,7 @@ function privatePlayerData(room, playerId) {
       label: player.condition.label,
       targetSign: player.condition.targetSign,
     },
+    targetSignOptions: player.role === "wolf" ? [...TARGET_SIGN_KEYS] : [],
   };
 }
 
@@ -508,20 +511,25 @@ io.on("connection", (socket) => {
     startRoomGame(room);
   });
 
-  socket.on("game:investigate", ({ targetId } = {}) => {
+  socket.on("game:investigate", ({ targetId, targetSign } = {}) => {
     const room = getRoom(socket);
     const member = getMember(room, socket.id);
     const playerId = member?.playerId;
+    const player = getPlayer(room, playerId);
     if (!room?.game || room.phase !== "investigation" || !room.investigationPending.has(playerId) || room.investigationReports.has(playerId)) {
       return sendError(socket, "観測済みか、現在は観測できない状態です。");
     }
     try {
-      const report = room.game.investigate(playerId, targetId);
+      const selectedTargetSign = player.role === "wolf" && TARGET_SIGN_KEYS.includes(targetSign)
+        ? targetSign
+        : undefined;
+      const report = room.game.investigate(playerId, targetId, selectedTargetSign);
       room.investigationReports.set(playerId, report);
       socket.emit("game:observation", {
         target: { id: report.target.id, name: report.target.name },
-        condition: { label: report.condition.label, targetSign: report.condition.targetSign },
+        condition: { label: report.condition.label, targetSign: report.targetSign },
         observed: report.observed,
+        targetSign: report.targetSign,
         isMatch: report.isMatch,
         reportedSign: report.reportedSign,
         truthful: true,
@@ -544,7 +552,7 @@ io.on("connection", (socket) => {
     } else {
       if (mode === "lie" && player.role === "wolf") {
       report.isMatch = !report.isMatch;
-      const expectedSymbol = report.condition.targetSign === "positive" ? "+" : "−";
+      const expectedSymbol = report.condition.targetSign === "positive" ? "+" : report.condition.targetSign === "negative" ? "−" : "0";
       const unexpectedSymbol = report.condition.targetSign === "positive" ? "−" : "+";
       report.reportedSign = report.isMatch ? expectedSymbol : unexpectedSymbol;
       report.truthful = false;

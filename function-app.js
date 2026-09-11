@@ -12,6 +12,7 @@ const state = {
   privateAction: null,
   myFunction: null,
   nightTargetId: null,
+  targetSignChoice: null,
   observation: null,
   exileReveal: null,
   attackResult: null,

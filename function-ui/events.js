@@ -40,7 +40,7 @@ export function bindEvents({ state, socket, render }) {
     event.preventDefault(); state.error = null; socket.emit("room:join", formValues(event.currentTarget));
   });
   document.querySelector("#leave-room")?.addEventListener("click", () => {
-    socket.emit("room:leave"); state.room = null; state.game = null; state.privateAction = null; state.myFunction = null; state.observation = null; state.exileReveal = null; state.attackResult = null; state.nightTargetId = null; render();
+    socket.emit("room:leave"); state.room = null; state.game = null; state.privateAction = null; state.myFunction = null; state.observation = null; state.exileReveal = null; state.attackResult = null; state.nightTargetId = null; state.targetSignChoice = null; render();
   });
   document.querySelector("#start-online-game")?.addEventListener("click", () => socket.emit("room:start"));
   document.querySelector("#room-player-count-form")?.addEventListener("submit", (event) => {
@@ -63,7 +63,11 @@ export function bindEvents({ state, socket, render }) {
   document.querySelector("#begin-vote")?.addEventListener("click", () => socket.emit("game:begin-vote"));
   document.querySelector("#begin-night")?.addEventListener("click", () => socket.emit("game:begin-night"));
   document.querySelector("#next-round")?.addEventListener("click", () => socket.emit("game:next-round"));
-  document.querySelectorAll("[data-investigate]").forEach((button) => button.addEventListener("click", () => socket.emit("game:investigate", { targetId: button.dataset.investigate })));
+  document.querySelectorAll("[data-investigate]").forEach((button) => button.addEventListener("click", () => socket.emit("game:investigate", { targetId: button.dataset.investigate, targetSign: state.targetSignChoice })));
+  document.querySelectorAll("[data-target-sign]").forEach((button) => button.addEventListener("click", () => {
+    state.targetSignChoice = button.dataset.targetSign;
+    render();
+  }));
   document.querySelectorAll("[data-publish]").forEach((button) => button.addEventListener("click", () => { socket.emit("game:publish", { mode: button.dataset.publish }); state.observation = null; }));
   document.querySelector("#start-tutorial-citizen")?.addEventListener("click", () => { state.tutorialMode = true; state.tutorialRole = "citizen"; state.game = null; render(); });
   document.querySelector("#start-tutorial-wolf")?.addEventListener("click", () => { state.tutorialMode = true; state.tutorialRole = "wolf"; state.game = null; render(); });
@@ -100,14 +104,14 @@ export function bindSocketEvents({ state, socket, render }) {
   socket.on("game:state", (game) => {
     const keepPrivateAction = state.game?.phase === game.phase && state.privateAction?.playerId === game.myPlayerId && !game.submitted;
     state.game = game;
-    if (!keepPrivateAction) { state.privateAction = null; state.observation = null; state.exileReveal = null; state.attackResult = null; state.nightTargetId = null; }
+    if (!keepPrivateAction) { state.privateAction = null; state.observation = null; state.exileReveal = null; state.attackResult = null; state.nightTargetId = null; state.targetSignChoice = null; }
     state.error = null; render();
   });
   socket.on("game:private", (action) => {
     state.privateAction = action;
     // 自分の関数は届いたタイミングでキャッシュし、投票などその後のフェーズでも左パネルに表示し続ける
     if (action.function) state.myFunction = action.function;
-    state.observation = null; state.exileReveal = null; state.attackResult = null; state.nightTargetId = null; render();
+    state.observation = null; state.exileReveal = null; state.attackResult = null; state.nightTargetId = null; state.targetSignChoice = action.role === "wolf" ? action.condition.targetSign : null; render();
   });
   socket.on("game:observation", (observation) => { state.observation = observation; render(); });
   socket.on("game:exile-reveal", (reveal) => { state.exileReveal = reveal; render(); });
