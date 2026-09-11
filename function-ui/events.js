@@ -111,7 +111,11 @@ export function bindSocketEvents({ state, socket, render }) {
     state.privateAction = action;
     // 自分の関数は届いたタイミングでキャッシュし、投票などその後のフェーズでも左パネルに表示し続ける
     if (action.function) state.myFunction = action.function;
-    state.observation = null; state.exileReveal = null; state.attackResult = null; state.nightTargetId = null; state.targetSignChoice = action.role === "wolf" ? action.condition.targetSign : null; render();
+    state.observation = null; state.exileReveal = null; state.attackResult = null; state.nightTargetId = null;
+    state.targetSignChoice = action.kind === "investigation" && action.role === "wolf" && action.condition
+      ? action.condition.targetSign
+      : null;
+    render();
   });
   socket.on("game:observation", (observation) => { state.observation = observation; render(); });
   socket.on("game:exile-reveal", (reveal) => { state.exileReveal = reveal; render(); });

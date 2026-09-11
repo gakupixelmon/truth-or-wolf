@@ -595,6 +595,12 @@ io.on("connection", (socket) => {
     beginNight(room);
   });
 
+  socket.on("game:request-night", () => {
+    const room = getRoom(socket);
+    if (!memberCanAct(room, socket, "night")) return;
+    sendNightTurn(room);
+  });
+
   socket.on("game:attack", ({ targetId, functionId } = {}) => {
     const room = getRoom(socket);
     if (!memberCanAct(room, socket, "night") || room.game.primaryWolf?.id !== room.activePlayerId) return sendError(socket, "今は襲撃を選べません。");
