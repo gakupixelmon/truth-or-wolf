@@ -1,6 +1,10 @@
 export function checkOutcome(game, exiled = null) {
-  if (exiled?.role === "wolf" || !game.wolf.alive) {
-    game.outcome = { winner: "citizen", reason: "元の人狼が追放された。" };
+  if (exiled?.role === "wolf" && game.wolves.every((wolf) => !wolf.alive)) {
+    game.outcome = { winner: "citizen", reason: "元の人狼が全員追放された。" };
+    return game.outcome;
+  }
+  if (game.wolves.every((wolf) => !wolf.alive)) {
+    game.outcome = { winner: "citizen", reason: "元の人狼が全員追放された。" };
     return game.outcome;
   }
   const alive = game.alivePlayers();
@@ -11,4 +15,3 @@ export function checkOutcome(game, exiled = null) {
   }
   return null;
 }
-

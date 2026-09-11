@@ -13,6 +13,7 @@ const state = {
   myFunction: null,
   nightTargetId: null,
   observation: null,
+  exileReveal: null,
   attackResult: null,
   humanVotes: new Map(),
   voteResult: null,

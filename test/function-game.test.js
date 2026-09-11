@@ -40,6 +40,31 @@ test("the identity function y = x is assigned to exactly one citizen", () => {
   }
 });
 
+test("the identity-function rule can be disabled", () => {
+  for (let count = 4; count <= 12; count += 1) {
+    const game = new FunctionWolfGame({ playerCount: count, humanCount: 1, includeIdentityFunction: false, rng: seeded(count + 500) });
+    assert.equal(game.rules.includeIdentityFunction, false);
+    assert.equal(game.players.some((player) => player.baseFunction.id === "linear-1-0"), false);
+  }
+});
+
+test("multiple wolves share W and require all wolves to be exiled", () => {
+  const game = new FunctionWolfGame({ playerCount: 7, wolfCount: 2, humanCount: 7, rng: seeded(121) });
+  assert.equal(game.wolves.length, 2);
+  assert.ok(game.wolves.every((wolf) => wolf.baseFunction.id === game.omega.id));
+  const firstWolf = game.wolves[0];
+  const votes = new Map(game.players.map((player) => [player.id, firstWolf.id]));
+  votes.set(firstWolf.id, "none");
+  game.resolveVotes(votes);
+  assert.equal(firstWolf.alive, false);
+  assert.equal(game.outcome, null);
+  const secondWolf = game.wolves.find((wolf) => wolf.alive);
+  const finalVotes = new Map(game.players.filter((player) => player.alive).map((player) => [player.id, secondWolf.id]));
+  finalVotes.set(secondWolf.id, "none");
+  game.resolveVotes(finalVotes);
+  assert.equal(game.outcome.winner, "citizen");
+});
+
 test("each citizen test has false positives but all tests together isolate the wolf", () => {
   for (let seed = 1; seed <= 100; seed += 1) {
     const game = new FunctionWolfGame({ rng: seeded(seed) });
@@ -101,6 +126,16 @@ test("a wolf attack only infects when the guessed function matches", () => {
   const hit = game.resolveNight(hitTarget.id, hitTarget.baseFunction.id);
   assert.equal(hit.success, true);
   assert.equal(hitTarget.infected, true);
+});
+
+test("the attack-guess rule can be disabled", () => {
+  const game = new FunctionWolfGame({ humanCount: 7, requireAttackFunctionGuess: false, rng: seeded(191) });
+  const target = game.players.find((player) => player.role === "citizen");
+  const result = game.resolveNight(target.id, "not-a-real-function");
+  assert.equal(game.rules.requireAttackFunctionGuess, false);
+  assert.equal(result.success, true);
+  assert.equal(target.infected, true);
+  assert.equal(game.lastAttack.guessedFunctionId, null);
 });
 
 test("the wolf function options reveal types but not player ownership", () => {

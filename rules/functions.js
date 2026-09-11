@@ -55,37 +55,48 @@ export function makeCondition(_index, rng) {
   };
 }
 
-export function buildBalancedFunctions(wolfIndex, rng, playerCount = PLAYER_COUNT) {
+export function buildBalancedFunctions(wolfIndices, rng, playerCount = PLAYER_COUNT, { includeIdentityFunction = true } = {}) {
   const library = makeFunctionLibrary();
   if (playerCount < 2 || playerCount > library.length) {
     throw new Error(`Unsupported player count: ${playerCount}`);
   }
+  const wolfIndexList = Array.isArray(wolfIndices) ? wolfIndices : [wolfIndices];
+  const wolfSet = new Set(wolfIndexList);
+  if (wolfSet.size !== wolfIndexList.length || wolfSet.size < 1 || wolfSet.size >= playerCount || [...wolfSet].some((index) => index < 0 || index >= playerCount)) {
+    throw new Error(`Invalid wolf indices for ${playerCount} players`);
+  }
   let fallback = null;
   for (let attempt = 0; attempt < 6000; attempt += 1) {
     const identityFunction = library.find((candidate) => candidate.id === "linear-1-0");
-    const wolfCandidates = library.filter((candidate) => candidate.id !== identityFunction.id);
+    const availableLibrary = includeIdentityFunction
+      ? library
+      : library.filter((candidate) => candidate.id !== identityFunction.id);
+    const wolfCandidates = availableLibrary.filter((candidate) => !includeIdentityFunction || candidate.id !== identityFunction.id);
     const wolfFunction = wolfCandidates[Math.floor(rng() * wolfCandidates.length)];
     const wolfSignature = functionSignature(wolfFunction);
     const uniqueCitizens = [];
     const seen = new Set([wolfSignature]);
-    for (const candidate of shuffle(library, rng)) {
+    for (const candidate of shuffle(availableLibrary, rng)) {
       const signature = functionSignature(candidate);
       if (seen.has(signature)) continue;
       seen.add(signature);
       uniqueCitizens.push(candidate);
     }
-    const otherCitizens = uniqueCitizens.filter((candidate) => candidate.id !== identityFunction.id).slice(0, playerCount - 2);
-    const citizens = shuffle([identityFunction, ...otherCitizens], rng);
+    const citizenCount = playerCount - wolfSet.size;
+    const otherCitizens = uniqueCitizens.filter((candidate) => !includeIdentityFunction || candidate.id !== identityFunction.id);
+    const citizens = includeIdentityFunction
+      ? shuffle([identityFunction, ...otherCitizens.slice(0, citizenCount - 1)], rng)
+      : shuffle(otherCitizens.slice(0, citizenCount), rng);
     const functions = [];
     let citizenIndex = 0;
     for (let index = 0; index < playerCount; index += 1) {
-      functions.push(index === wolfIndex ? wolfFunction : citizens[citizenIndex++]);
+      functions.push(wolfSet.has(index) ? wolfFunction : citizens[citizenIndex++]);
     }
     const conditions = Array.from({ length: playerCount }, (_, index) => makeCondition(index, rng));
     const matchSets = [];
     let balanced = new Set(functions.map((_, index) => index));
     for (let observerIndex = 0; observerIndex < playerCount; observerIndex += 1) {
-      if (observerIndex === wolfIndex) continue;
+      if (wolfSet.has(observerIndex)) continue;
       const ownFunction = functions[observerIndex];
       const condition = conditions[observerIndex];
       const wolfKey = condition.observe(ownFunction.evaluate(wolfFunction.evaluate(condition.input))).key;
@@ -100,15 +111,15 @@ export function buildBalancedFunctions(wolfIndex, rng, playerCount = PLAYER_COUN
       balanced = new Set([...balanced].filter((candidate) => matches.has(candidate)));
     }
     const maxAmbiguousCandidates = playerCount <= 7 ? 4 : Math.max(4, Math.ceil(playerCount * 0.6));
-    const eachAmbiguous = matchSets.every((matches) => matches.has(wolfIndex) && matches.size >= 2 && matches.size <= maxAmbiguousCandidates);
+    const eachAmbiguous = matchSets.every((matches) => [...wolfSet].every((index) => matches.has(index)) && matches.size >= wolfSet.size + 1 && matches.size <= maxAmbiguousCandidates);
     const familyCount = new Set(functions.map((fn) => fn.family)).size;
-    if (eachAmbiguous && balanced.size === 1 && balanced.has(wolfIndex) && familyCount >= 3) {
+    if (eachAmbiguous && balanced.size === wolfSet.size && [...wolfSet].every((index) => balanced.has(index)) && familyCount >= 3) {
       for (let observerIndex = 0; observerIndex < playerCount; observerIndex += 1) {
         const ownFunction = functions[observerIndex];
         const condition = conditions[observerIndex];
         condition.targetSign = condition.observe(ownFunction.evaluate(wolfFunction.evaluate(condition.input))).key;
       }
-      fallback = { functions, conditions, wolfFunction };
+      fallback = { functions, conditions, wolfFunction, wolfIndices: [...wolfSet] };
       return fallback;
     }
   }
