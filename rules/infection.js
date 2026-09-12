@@ -19,7 +19,7 @@ function chooseFunctionGuess(game, options) {
 }
 
 export function resolveNight(game, targetId = null, functionId = undefined) {
-  if (!game.wolf.alive) return null;
+  if (!game.wolves.some((wolf) => wolf.alive)) return null;
   const candidates = game.alivePlayers().filter((player) => player.role !== "wolf" && !player.infected);
   if (!candidates.length) {
     game.checkOutcome();
@@ -27,13 +27,15 @@ export function resolveNight(game, targetId = null, functionId = undefined) {
   }
   let target = candidates.find((player) => player.id === targetId);
   if (!target) target = weightedChoice(candidates, (candidate) => candidate.human ? 1.6 : 1, game.rng);
-  const options = knownFunctionOptions(game);
+  const options = game.rules.requireAttackFunctionGuess ? knownFunctionOptions(game) : [];
   // 明示的な関数指定がない旧APIでは、指定対象の関数を正解として扱う。
   // サーバーのCPU襲撃は対象も省略するため、ここでは秘密の推測を行う。
-  const guessedFunctionId = functionId === undefined
-    ? (targetId === null ? chooseFunctionGuess(game, options) : target.baseFunction.id)
-    : functionId;
-  const success = guessedFunctionId === target.baseFunction.id;
+  const guessedFunctionId = game.rules.requireAttackFunctionGuess
+    ? (functionId === undefined
+      ? (targetId === null ? chooseFunctionGuess(game, options) : target.baseFunction.id)
+      : functionId)
+    : null;
+  const success = game.rules.requireAttackFunctionGuess ? guessedFunctionId === target.baseFunction.id : true;
   if (success) {
     target.infected = true;
     game.attackHistory.push(target.id);

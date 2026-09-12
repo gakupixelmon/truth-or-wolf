@@ -3,7 +3,8 @@ import { readFile } from "node:fs/promises";
 import { randomInt } from "node:crypto";
 import { Server } from "socket.io";
 import { FunctionWolfGame } from "./function-game.js";
-import { DEFAULT_PLAYER_COUNT, MAX_PLAYER_COUNT, MIN_PLAYER_COUNT } from "./rules/constants.js";
+import { DEFAULT_PLAYER_COUNT, DEFAULT_RULES, MAX_PLAYER_COUNT, MAX_WOLF_COUNT, MIN_PLAYER_COUNT } from "./rules/constants.js";
+import { TARGET_SIGN_KEYS } from "./rules/investigation.js";
 
 const host = process.env.HOST || "0.0.0.0";
 const port = Number(process.env.PORT || 4173);
@@ -59,6 +60,29 @@ function parsePlayerCount(value) {
   return Number.isInteger(count) && count >= MIN_PLAYER_COUNT && count <= MAX_PLAYER_COUNT ? count : null;
 }
 
+function maxWolvesForPlayerCount(playerCount) {
+  return Math.min(MAX_WOLF_COUNT, Math.floor((playerCount - 1) / 3));
+}
+
+function parseWolfCount(value, playerCount) {
+  const count = Number(value);
+  const maxWolves = maxWolvesForPlayerCount(playerCount);
+  return Number.isInteger(count) && count >= 1 && count <= maxWolves ? count : null;
+}
+
+function parseRuleBoolean(value, fallback) {
+  if (value === undefined || value === null || value === "") return fallback;
+  if (value === true || value === false) return value;
+  return value === "true" || value === "1" || value === "on";
+}
+
+function roomRules(room) {
+  return {
+    includeIdentityFunction: room.includeIdentityFunction,
+    requireAttackFunctionGuess: room.requireAttackFunctionGuess,
+  };
+}
+
 function makeRoomCode() {
   let code;
   do {
@@ -95,6 +119,7 @@ function publicReports(room) {
     observerName: report.observer.name,
     targetId: report.target.id,
     targetName: report.target.name,
+    targetSign: report.targetSign ?? report.condition.targetSign,
     reportedSign: report.reportedSign,
   }));
 }
@@ -150,6 +175,8 @@ function gameState(room, socketId) {
     myPlayerId: member?.playerId ?? null,
     isHost: member?.socketId === room.hostSocketId,
     playerCount: game.players.length,
+    wolfCount: game.wolfCount,
+    rules: game.rules,
   };
 }
 
@@ -160,6 +187,8 @@ function roomState(room, socketId) {
     // パスワードは部屋作成者本人にだけ返す。
     password: member?.socketId === room.hostSocketId ? room.password : null,
     playerCount: room.playerCount,
+    wolfCount: room.wolfCount,
+    ...roomRules(room),
     status: room.game ? "playing" : "lobby",
     isHost: member?.socketId === room.hostSocketId,
     players: room.members.map((entry) => ({
@@ -202,6 +231,7 @@ function privatePlayerData(room, playerId) {
       label: player.condition.label,
       targetSign: player.condition.targetSign,
     },
+    targetSignOptions: player.role === "wolf" ? [...TARGET_SIGN_KEYS] : [],
   };
 }
 
@@ -235,8 +265,28 @@ function sendVoteTurns(room) {
   }
 }
 
+function sendExileReveal(room, exiled) {
+  if (!exiled) return;
+  const reveal = {
+    playerId: exiled.id,
+    playerName: exiled.name,
+    function: {
+      label: exiled.baseFunction.label,
+      table: room.game.privateFunctionTable(exiled),
+    },
+    substitutionInput: exiled.condition.input,
+    conditionLabel: exiled.condition.label,
+    infected: exiled.infected,
+  };
+  for (const member of room.members) {
+    const player = getPlayer(room, member.playerId);
+    if (!player?.human || player.role !== "wolf" || !player.alive) continue;
+    io.to(member.socketId).emit("game:exile-reveal", reveal);
+  }
+}
+
 function sendNightTurn(room) {
-  const player = room.game.wolf;
+  const player = room.game.primaryWolf;
   const member = room.members.find((entry) => entry.playerId === player?.id);
   if (!player || !member) return;
   io.to(member.socketId).emit("game:private", {
@@ -248,7 +298,8 @@ function sendNightTurn(room) {
       .filter((target) => target.role !== "wolf" && !target.infected)
       .map((target) => ({ id: target.id, name: target.name })),
     // 人狼には関数の種類だけを渡す。どのプレイヤーが持つかは渡さない。
-    functionOptions: room.game.knownFunctionOptions(),
+    functionOptions: room.game.rules.requireAttackFunctionGuess ? room.game.knownFunctionOptions() : [],
+    requiresFunctionGuess: room.game.rules.requireAttackFunctionGuess,
   });
 }
 
@@ -290,16 +341,17 @@ function beginVote(room) {
 }
 
 function finishVote(room) {
-  room.game.resolveVotes(room.humanVotes);
+  const result = room.game.resolveVotes(room.humanVotes);
   room.activePlayerId = null;
   room.phase = room.game.outcome ? "ended" : "vote-result";
   sendGameState(room);
+  sendExileReveal(room, result.exiled);
 }
 
 function beginNight(room) {
   if (room.game.outcome) return;
   room.phase = "night";
-  const wolf = room.game.wolf;
+  const wolf = room.game.primaryWolf;
   if (wolf.human && wolf.alive) {
     room.activePlayerId = wolf.id;
     sendGameState(room);
@@ -317,7 +369,7 @@ function finishNight(room, targetId, functionId) {
   room.phase = room.game.outcome ? "ended" : "night-result";
   room.activePlayerId = null;
   sendGameState(room);
-  const wolf = room.game.wolf;
+  const wolf = room.game.primaryWolf;
   const member = room.members.find((entry) => entry.playerId === wolf?.id);
   if (member && result) {
     io.to(member.socketId).emit("game:attack-result", { success: result.success });
@@ -350,7 +402,13 @@ function removeMember(room, socketId) {
 }
 
 function startRoomGame(room) {
-  room.game = new FunctionWolfGame({ humanCount: room.members.length, playerCount: room.playerCount });
+  room.game = new FunctionWolfGame({
+    humanCount: room.members.length,
+    playerCount: room.playerCount,
+    wolfCount: room.wolfCount,
+    includeIdentityFunction: room.includeIdentityFunction,
+    requireAttackFunctionGuess: room.requireAttackFunctionGuess,
+  });
   room.members.forEach((member, index) => {
     const player = room.game.players[index];
     player.name = member.name;
@@ -361,14 +419,18 @@ function startRoomGame(room) {
 }
 
 io.on("connection", (socket) => {
-  socket.on("room:create", ({ name, password, playerCount } = {}) => {
+  socket.on("room:create", ({ name, password, playerCount, wolfCount, includeIdentityFunction, requireAttackFunctionGuess } = {}) => {
     if (getRoom(socket)) return sendError(socket, "すでに部屋に参加しています。");
     const playerName = cleanText(name, "プレイヤー");
     const totalPlayerCount = parsePlayerCount(playerCount) ?? DEFAULT_PLAYER_COUNT;
+    const totalWolfCount = parseWolfCount(wolfCount, totalPlayerCount) ?? 1;
     const room = {
       code: makeRoomCode(),
       password: String(password ?? "").slice(0, 64),
       playerCount: totalPlayerCount,
+      wolfCount: totalWolfCount,
+      includeIdentityFunction: parseRuleBoolean(includeIdentityFunction, DEFAULT_RULES.includeIdentityFunction),
+      requireAttackFunctionGuess: parseRuleBoolean(requireAttackFunctionGuess, DEFAULT_RULES.requireAttackFunctionGuess),
       hostSocketId: socket.id,
       members: [{ socketId: socket.id, playerId: null, name: playerName }],
       game: null,
@@ -407,14 +469,19 @@ io.on("connection", (socket) => {
     socket.data.roomCode = null;
   });
 
-  socket.on("room:set-player-count", ({ playerCount } = {}) => {
+  socket.on("room:set-player-count", ({ playerCount, wolfCount, includeIdentityFunction, requireAttackFunctionGuess } = {}) => {
     const room = getRoom(socket);
     if (!room || room.hostSocketId !== socket.id) return sendError(socket, "部屋の作成者だけが人数を変更できます。");
     if (room.game && room.phase !== "ended") return sendError(socket, "ゲーム中は人数を変更できません。");
     const totalPlayerCount = parsePlayerCount(playerCount);
     if (totalPlayerCount === null) return sendError(socket, `人数は${MIN_PLAYER_COUNT}〜${MAX_PLAYER_COUNT}人で指定してください。`);
     if (room.members.length > totalPlayerCount) return sendError(socket, "現在の参加者数より少ない人数には変更できません。");
+    const totalWolfCount = wolfCount === undefined ? room.wolfCount : parseWolfCount(wolfCount, totalPlayerCount);
+    if (totalWolfCount === null) return sendError(socket, `この人数では人狼は1〜${maxWolvesForPlayerCount(totalPlayerCount)}人にしてください。`);
     room.playerCount = totalPlayerCount;
+    room.wolfCount = totalWolfCount;
+    room.includeIdentityFunction = parseRuleBoolean(includeIdentityFunction, room.includeIdentityFunction);
+    room.requireAttackFunctionGuess = parseRuleBoolean(requireAttackFunctionGuess, room.requireAttackFunctionGuess);
     sendRoomState(room);
     if (room.game) sendGameState(room);
   });
@@ -426,7 +493,7 @@ io.on("connection", (socket) => {
     startRoomGame(room);
   });
 
-  socket.on("room:restart", ({ playerCount } = {}) => {
+  socket.on("room:restart", ({ playerCount, wolfCount, includeIdentityFunction, requireAttackFunctionGuess } = {}) => {
     const room = getRoom(socket);
     if (!room || room.hostSocketId !== socket.id) return sendError(socket, "部屋の作成者だけが再戦を開始できます。");
     if (!room.game || room.phase !== "ended") return sendError(socket, "ゲーム終了後に再戦できます。");
@@ -436,23 +503,33 @@ io.on("connection", (socket) => {
       if (room.members.length > totalPlayerCount) return sendError(socket, "現在の参加者数より少ない人数には変更できません。");
       room.playerCount = totalPlayerCount;
     }
+    const totalWolfCount = parseWolfCount(wolfCount ?? room.wolfCount, room.playerCount);
+    if (totalWolfCount === null) return sendError(socket, `この人数では人狼は1〜${maxWolvesForPlayerCount(room.playerCount)}人にしてください。`);
+    room.wolfCount = totalWolfCount;
+    room.includeIdentityFunction = parseRuleBoolean(includeIdentityFunction, room.includeIdentityFunction);
+    room.requireAttackFunctionGuess = parseRuleBoolean(requireAttackFunctionGuess, room.requireAttackFunctionGuess);
     startRoomGame(room);
   });
 
-  socket.on("game:investigate", ({ targetId } = {}) => {
+  socket.on("game:investigate", ({ targetId, targetSign } = {}) => {
     const room = getRoom(socket);
     const member = getMember(room, socket.id);
     const playerId = member?.playerId;
+    const player = getPlayer(room, playerId);
     if (!room?.game || room.phase !== "investigation" || !room.investigationPending.has(playerId) || room.investigationReports.has(playerId)) {
       return sendError(socket, "観測済みか、現在は観測できない状態です。");
     }
     try {
-      const report = room.game.investigate(playerId, targetId);
+      const selectedTargetSign = player.role === "wolf" && TARGET_SIGN_KEYS.includes(targetSign)
+        ? targetSign
+        : undefined;
+      const report = room.game.investigate(playerId, targetId, selectedTargetSign);
       room.investigationReports.set(playerId, report);
       socket.emit("game:observation", {
         target: { id: report.target.id, name: report.target.name },
-        condition: { label: report.condition.label, targetSign: report.condition.targetSign },
+        condition: { label: report.condition.label, targetSign: report.targetSign },
         observed: report.observed,
+        targetSign: report.targetSign,
         isMatch: report.isMatch,
         reportedSign: report.reportedSign,
         truthful: true,
@@ -475,7 +552,7 @@ io.on("connection", (socket) => {
     } else {
       if (mode === "lie" && player.role === "wolf") {
       report.isMatch = !report.isMatch;
-      const expectedSymbol = report.condition.targetSign === "positive" ? "+" : "−";
+      const expectedSymbol = report.condition.targetSign === "positive" ? "+" : report.condition.targetSign === "negative" ? "−" : "0";
       const unexpectedSymbol = report.condition.targetSign === "positive" ? "−" : "+";
       report.reportedSign = report.isMatch ? expectedSymbol : unexpectedSymbol;
       report.truthful = false;
@@ -518,14 +595,24 @@ io.on("connection", (socket) => {
     beginNight(room);
   });
 
+  socket.on("game:request-night", () => {
+    const room = getRoom(socket);
+    if (!memberCanAct(room, socket, "night")) return;
+    sendNightTurn(room);
+  });
+
   socket.on("game:attack", ({ targetId, functionId } = {}) => {
     const room = getRoom(socket);
-    if (!memberCanAct(room, socket, "night") || room.game.wolf.id !== room.activePlayerId) return sendError(socket, "今は襲撃を選べません。");
+    if (!memberCanAct(room, socket, "night") || room.game.primaryWolf?.id !== room.activePlayerId) return sendError(socket, "今は襲撃を選べません。");
     const target = room.game.alivePlayers().find((player) => player.id === targetId && player.role !== "wolf" && !player.infected);
     if (!target) return sendError(socket, "その対象は襲撃できません。");
-    const functionOptions = room.game.knownFunctionOptions();
-    if (!functionOptions.some((option) => option.id === functionId)) return sendError(socket, "その関数は推測候補にありません。");
-    finishNight(room, target.id, functionId);
+    if (room.game.rules.requireAttackFunctionGuess) {
+      const functionOptions = room.game.knownFunctionOptions();
+      if (!functionOptions.some((option) => option.id === functionId)) return sendError(socket, "その関数は推測候補にありません。");
+      finishNight(room, target.id, functionId);
+    } else {
+      finishNight(room, target.id);
+    }
   });
 
   socket.on("game:next-round", () => {

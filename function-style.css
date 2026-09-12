@@ -30,6 +30,8 @@
 .room-settings-row { display: flex; gap: 8px; }
 .room-settings-row input { min-width: 0; flex: 1; padding: 0 10px; border: 1px solid var(--line); background: #12100f; color: var(--ink); }
 .room-settings-row button { flex: 0 0 auto; }
+.rule-toggle { display: flex; align-items: center; gap: 8px; margin-top: 4px; color: var(--muted); font-size: 0.82rem; cursor: pointer; }
+.rule-toggle input { accent-color: var(--accent); }
 .outcome-restart { margin: 12px 0; }
 .waiting-note { color: var(--muted); font-size: 10px; line-height: 1.7; }
 .waiting-card { text-align: center; }

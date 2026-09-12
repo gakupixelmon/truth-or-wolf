@@ -17,8 +17,9 @@ export function chooseWolfVote(game) {
 
 export function resolveVotes(game, humanVotes = new Map()) {
   const alive = game.alivePlayers();
-  let wolfChoice = game.wolf.human ? humanVotes.get(game.wolf.id) : chooseWolfVote(game);
-  if (!wolfChoice || wolfChoice === game.wolf.id) wolfChoice = "none";
+  const primaryWolf = game.primaryWolf ?? game.wolf;
+  let wolfChoice = primaryWolf?.human ? humanVotes.get(primaryWolf.id) : chooseWolfVote(game);
+  if (!wolfChoice || game.wolves.some((wolf) => wolf.id === wolfChoice)) wolfChoice = "none";
   const votes = [];
   for (const voter of alive) {
     let choice;
@@ -42,4 +43,3 @@ export function resolveVotes(game, humanVotes = new Map()) {
   game.phase = game.outcome ? "ended" : "night";
   return game.lastVote;
 }
-
