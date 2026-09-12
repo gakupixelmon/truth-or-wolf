@@ -48,6 +48,26 @@ test("the identity-function rule can be disabled", () => {
   }
 });
 
+test("admin presets can force the human wolf or the citizen identity function", () => {
+  const wolfGame = new FunctionWolfGame({ humanCount: 1, forceHumanRole: "wolf", rng: seeded(601) });
+  assert.equal(wolfGame.players[0].role, "wolf");
+
+  const identityGame = new FunctionWolfGame({ humanCount: 1, forceHumanRole: "identity", includeIdentityFunction: false, rng: seeded(602) });
+  assert.equal(identityGame.players[0].role, "citizen");
+  assert.equal(identityGame.players[0].baseFunction.id, "linear-1-0");
+  assert.equal(identityGame.rules.includeIdentityFunction, true);
+});
+
+test("admin posterior tracking records snapshots without changing normal games", () => {
+  const normal = new FunctionWolfGame({ humanCount: 1, rng: seeded(603) });
+  assert.equal(normal.posteriorHistory.length, 0);
+  const admin = new FunctionWolfGame({ humanCount: 1, trackPosterior: true, rng: seeded(604) });
+  assert.equal(admin.posteriorHistory.length, 1);
+  admin.runCpuInvestigations();
+  assert.equal(admin.posteriorHistory.length, 2);
+  assert.ok(admin.posteriorHistory[1].values.length > 0);
+});
+
 test("multiple wolves share W and require all wolves to be exiled", () => {
   const game = new FunctionWolfGame({ playerCount: 7, wolfCount: 2, humanCount: 7, rng: seeded(121) });
   assert.equal(game.wolves.length, 2);

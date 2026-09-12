@@ -55,7 +55,7 @@ export function makeCondition(_index, rng) {
   };
 }
 
-export function buildBalancedFunctions(wolfIndices, rng, playerCount = PLAYER_COUNT, { includeIdentityFunction = true } = {}) {
+export function buildBalancedFunctions(wolfIndices, rng, playerCount = PLAYER_COUNT, { includeIdentityFunction = true, identityPlayerIndex = null } = {}) {
   const library = makeFunctionLibrary();
   if (playerCount < 2 || playerCount > library.length) {
     throw new Error(`Unsupported player count: ${playerCount}`);
@@ -91,6 +91,12 @@ export function buildBalancedFunctions(wolfIndices, rng, playerCount = PLAYER_CO
     let citizenIndex = 0;
     for (let index = 0; index < playerCount; index += 1) {
       functions.push(wolfSet.has(index) ? wolfFunction : citizens[citizenIndex++]);
+    }
+    if (includeIdentityFunction && Number.isInteger(identityPlayerIndex) && identityPlayerIndex >= 0 && identityPlayerIndex < playerCount && !wolfSet.has(identityPlayerIndex)) {
+      const identityIndex = functions.findIndex((candidate) => candidate.id === identityFunction.id);
+      if (identityIndex >= 0 && identityIndex !== identityPlayerIndex) {
+        [functions[identityIndex], functions[identityPlayerIndex]] = [functions[identityPlayerIndex], functions[identityIndex]];
+      }
     }
     const conditions = Array.from({ length: playerCount }, (_, index) => makeCondition(index, rng));
     const matchSets = [];

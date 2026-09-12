@@ -63,6 +63,10 @@ git push origin feature/gakupixelmon
 - 元人狼を全員追放すれば市民勝利
 - 生存中の人狼と襲撃済み市民が生存者の過半数を超えれば人狼勝利
 
+### 管理者モード
+
+管理者モードの鍵はソースコードに書かず、`.env` またはデプロイ先の環境変数 `TRUTH_OR_WOLF_ADMIN_KEY` に設定します。ローカルでは `.env.example` を `.env` にコピーして値を変更します。鍵を名前欄へ入力して部屋を作成すると、管理者用の設定画面が表示されます。`.env` は `.gitignore` でGitHubへの登録対象外です。
+
 旧バージョンは `http://localhost:4173/classic.html` からプレイできます。
 
 ### コード構成（共同開発向け）
