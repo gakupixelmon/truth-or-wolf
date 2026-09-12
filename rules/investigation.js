@@ -73,5 +73,6 @@ export function runCpuInvestigations(game) {
       reports.push(report);
     }
   }
+  game.recordPosteriorSnapshot?.(`round-${game.round}-investigation`);
   return reports;
 }

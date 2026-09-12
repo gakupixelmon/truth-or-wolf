@@ -1,13 +1,21 @@
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
-import { randomInt } from "node:crypto";
+import { randomInt, timingSafeEqual } from "node:crypto";
 import { Server } from "socket.io";
 import { FunctionWolfGame } from "./function-game.js";
 import { DEFAULT_PLAYER_COUNT, DEFAULT_RULES, MAX_PLAYER_COUNT, MAX_WOLF_COUNT, MIN_PLAYER_COUNT } from "./rules/constants.js";
 import { TARGET_SIGN_KEYS } from "./rules/investigation.js";
 
+try {
+  process.loadEnvFile?.();
+} catch {
+  // .env is optional; deployment environments can provide variables directly.
+}
+
 const host = process.env.HOST || "0.0.0.0";
 const port = Number(process.env.PORT || 4173);
+const adminEntryKey = String(process.env.TRUTH_OR_WOLF_ADMIN_KEY || "").trim();
+const DEFAULT_ADMIN_CONFIG = Object.freeze({ forceHumanRole: "random", trackPosterior: false });
 const files = new Map([
   ["/", ["index.html", "text/html; charset=utf-8"]],
   ["/index.html", ["index.html", "text/html; charset=utf-8"]],
@@ -53,6 +61,24 @@ const rooms = new Map();
 
 function cleanText(value, fallback = "") {
   return String(value ?? fallback).trim().slice(0, 24);
+}
+
+function isAdminEntry(value) {
+  if (!adminEntryKey || String(value ?? "").length < 32) return false;
+  const candidate = Buffer.from(String(value));
+  const secret = Buffer.from(adminEntryKey);
+  return candidate.length === secret.length && timingSafeEqual(candidate, secret);
+}
+
+function parseAdminRole(value, fallback = DEFAULT_ADMIN_CONFIG.forceHumanRole) {
+  return ["random", "wolf", "identity"].includes(value) ? value : fallback;
+}
+
+function adminConfigFromInput(input = {}, fallback = DEFAULT_ADMIN_CONFIG) {
+  return {
+    forceHumanRole: parseAdminRole(input.forceHumanRole, fallback.forceHumanRole),
+    trackPosterior: parseRuleBoolean(input.trackPosterior, fallback.trackPosterior),
+  };
 }
 
 function parsePlayerCount(value) {
@@ -174,9 +200,11 @@ function gameState(room, socketId) {
     submitted,
     myPlayerId: member?.playerId ?? null,
     isHost: member?.socketId === room.hostSocketId,
+    admin: member?.admin === true,
     playerCount: game.players.length,
     wolfCount: game.wolfCount,
     rules: game.rules,
+    posteriorHistory: member?.admin === true && game.trackPosterior ? game.posteriorHistory : null,
   };
 }
 
@@ -191,6 +219,8 @@ function roomState(room, socketId) {
     ...roomRules(room),
     status: room.game ? "playing" : "lobby",
     isHost: member?.socketId === room.hostSocketId,
+    isAdmin: member?.admin === true,
+    adminConfig: member?.admin === true ? room.adminConfig : null,
     players: room.members.map((entry) => ({
       name: entry.name,
       connected: Boolean(io.sockets.sockets.get(entry.socketId)),
@@ -408,6 +438,8 @@ function startRoomGame(room) {
     wolfCount: room.wolfCount,
     includeIdentityFunction: room.includeIdentityFunction,
     requireAttackFunctionGuess: room.requireAttackFunctionGuess,
+    forceHumanRole: room.adminConfig.forceHumanRole,
+    trackPosterior: room.adminConfig.trackPosterior,
   });
   room.members.forEach((member, index) => {
     const player = room.game.players[index];
@@ -421,7 +453,8 @@ function startRoomGame(room) {
 io.on("connection", (socket) => {
   socket.on("room:create", ({ name, password, playerCount, wolfCount, includeIdentityFunction, requireAttackFunctionGuess } = {}) => {
     if (getRoom(socket)) return sendError(socket, "すでに部屋に参加しています。");
-    const playerName = cleanText(name, "プレイヤー");
+    const admin = isAdminEntry(name);
+    const playerName = admin ? "管理者" : cleanText(name, "プレイヤー");
     const totalPlayerCount = parsePlayerCount(playerCount) ?? DEFAULT_PLAYER_COUNT;
     const totalWolfCount = parseWolfCount(wolfCount, totalPlayerCount) ?? 1;
     const room = {
@@ -431,8 +464,9 @@ io.on("connection", (socket) => {
       wolfCount: totalWolfCount,
       includeIdentityFunction: parseRuleBoolean(includeIdentityFunction, DEFAULT_RULES.includeIdentityFunction),
       requireAttackFunctionGuess: parseRuleBoolean(requireAttackFunctionGuess, DEFAULT_RULES.requireAttackFunctionGuess),
+      adminConfig: { ...DEFAULT_ADMIN_CONFIG },
       hostSocketId: socket.id,
-      members: [{ socketId: socket.id, playerId: null, name: playerName }],
+      members: [{ socketId: socket.id, playerId: null, name: playerName, admin }],
       game: null,
       phase: "lobby",
       activePlayerId: null,
@@ -455,7 +489,7 @@ io.on("connection", (socket) => {
     if (room.password !== String(password ?? "").slice(0, 64)) return sendError(socket, "パスワードが違います。");
     if (room.game) return sendError(socket, "この部屋のゲームはすでに始まっています。");
     if (room.members.length >= room.playerCount) return sendError(socket, "この部屋は満員です。");
-    room.members.push({ socketId: socket.id, playerId: null, name: cleanText(name, "プレイヤー") });
+    room.members.push({ socketId: socket.id, playerId: null, name: cleanText(name, "プレイヤー"), admin: false });
     socket.join(room.code);
     socket.data.roomCode = room.code;
     sendRoomState(room);
@@ -482,6 +516,18 @@ io.on("connection", (socket) => {
     room.wolfCount = totalWolfCount;
     room.includeIdentityFunction = parseRuleBoolean(includeIdentityFunction, room.includeIdentityFunction);
     room.requireAttackFunctionGuess = parseRuleBoolean(requireAttackFunctionGuess, room.requireAttackFunctionGuess);
+    if (room.adminConfig.forceHumanRole === "identity") room.includeIdentityFunction = true;
+    sendRoomState(room);
+    if (room.game) sendGameState(room);
+  });
+
+  socket.on("room:set-admin-settings", ({ forceHumanRole, trackPosterior } = {}) => {
+    const room = getRoom(socket);
+    const member = getMember(room, socket.id);
+    if (!room || room.hostSocketId !== socket.id || !member?.admin) return sendError(socket, "管理者モードの設定を変更できません。");
+    if (room.game && room.phase !== "ended") return sendError(socket, "ゲーム中は管理者設定を変更できません。");
+    room.adminConfig = adminConfigFromInput({ forceHumanRole, trackPosterior }, room.adminConfig);
+    if (room.adminConfig.forceHumanRole === "identity") room.includeIdentityFunction = true;
     sendRoomState(room);
     if (room.game) sendGameState(room);
   });
@@ -493,8 +539,9 @@ io.on("connection", (socket) => {
     startRoomGame(room);
   });
 
-  socket.on("room:restart", ({ playerCount, wolfCount, includeIdentityFunction, requireAttackFunctionGuess } = {}) => {
+  socket.on("room:restart", ({ playerCount, wolfCount, includeIdentityFunction, requireAttackFunctionGuess, forceHumanRole, trackPosterior } = {}) => {
     const room = getRoom(socket);
+    const member = getMember(room, socket.id);
     if (!room || room.hostSocketId !== socket.id) return sendError(socket, "部屋の作成者だけが再戦を開始できます。");
     if (!room.game || room.phase !== "ended") return sendError(socket, "ゲーム終了後に再戦できます。");
     if (playerCount !== undefined) {
@@ -508,6 +555,8 @@ io.on("connection", (socket) => {
     room.wolfCount = totalWolfCount;
     room.includeIdentityFunction = parseRuleBoolean(includeIdentityFunction, room.includeIdentityFunction);
     room.requireAttackFunctionGuess = parseRuleBoolean(requireAttackFunctionGuess, room.requireAttackFunctionGuess);
+    if (member?.admin) room.adminConfig = adminConfigFromInput({ forceHumanRole, trackPosterior }, room.adminConfig);
+    if (room.adminConfig.forceHumanRole === "identity") room.includeIdentityFunction = true;
     startRoomGame(room);
   });
 

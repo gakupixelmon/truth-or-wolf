@@ -32,6 +32,12 @@
 .room-settings-row button { flex: 0 0 auto; }
 .rule-toggle { display: flex; align-items: center; gap: 8px; margin-top: 4px; color: var(--muted); font-size: 0.82rem; cursor: pointer; }
 .rule-toggle input { accent-color: var(--accent); }
+.posterior-panel { max-height: 38vh; overflow: auto; }
+.posterior-snapshot { border-top: 1px solid var(--line-soft); padding: 6px 0; font-size: 0.72rem; }
+.posterior-snapshot summary { color: var(--muted); cursor: pointer; }
+.posterior-observer { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; color: var(--dim); }
+.posterior-observer b { width: 100%; color: var(--ink); }
+.posterior-observer span { padding: 2px 4px; border: 1px solid var(--line-soft); }
 .outcome-restart { margin: 12px 0; }
 .waiting-note { color: var(--muted); font-size: 10px; line-height: 1.7; }
 .waiting-card { text-align: center; }

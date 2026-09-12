@@ -52,12 +52,21 @@ export function bindEvents({ state, socket, render }) {
       requireAttackFunctionGuess: document.querySelector("#room-require-attack-guess")?.checked ?? true,
     });
   });
+  document.querySelector("#admin-settings-form")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    socket.emit("room:set-admin-settings", {
+      forceHumanRole: document.querySelector("#admin-force-role")?.value,
+      trackPosterior: document.querySelector("#admin-track-posterior")?.checked ?? false,
+    });
+  });
   document.querySelector("#restart-room")?.addEventListener("click", () => {
     socket.emit("room:restart", {
       playerCount: document.querySelector("#restart-player-count")?.value,
       wolfCount: document.querySelector("#restart-wolf-count")?.value,
       includeIdentityFunction: document.querySelector("#restart-include-identity")?.checked ?? true,
       requireAttackFunctionGuess: document.querySelector("#restart-require-attack-guess")?.checked ?? true,
+      forceHumanRole: document.querySelector("#restart-force-role")?.value,
+      trackPosterior: document.querySelector("#restart-track-posterior")?.checked,
     });
   });
   document.querySelector("#begin-vote")?.addEventListener("click", () => socket.emit("game:begin-vote"));

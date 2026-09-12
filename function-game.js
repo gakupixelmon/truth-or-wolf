@@ -9,7 +9,7 @@ export { DEFAULT_RULES, INPUT_COUNT, FUNCTION_NAMES } from "./rules/constants.js
 
 /** ゲーム状態の保持を担当するファサード。ルール本体は rules/ 以下に分離。 */
 export class FunctionWolfGame {
-  constructor({ humanCount = 1, playerCount = DEFAULT_PLAYER_COUNT, wolfCount = 1, rng = Math.random, includeIdentityFunction = DEFAULT_RULES.includeIdentityFunction, requireAttackFunctionGuess = DEFAULT_RULES.requireAttackFunctionGuess } = {}) {
+  constructor({ humanCount = 1, playerCount = DEFAULT_PLAYER_COUNT, wolfCount = 1, rng = Math.random, includeIdentityFunction = DEFAULT_RULES.includeIdentityFunction, requireAttackFunctionGuess = DEFAULT_RULES.requireAttackFunctionGuess, forceHumanRole = "random", trackPosterior = false } = {}) {
     if (!Number.isInteger(playerCount) || playerCount < MIN_PLAYER_COUNT || playerCount > MAX_PLAYER_COUNT) {
       throw new Error(`playerCount must be between ${MIN_PLAYER_COUNT} and ${MAX_PLAYER_COUNT}`);
     }
@@ -20,19 +20,30 @@ export class FunctionWolfGame {
     if (!Number.isInteger(wolfCount) || wolfCount < 1 || wolfCount > maxWolves) {
       throw new Error(`wolfCount must be between 1 and ${maxWolves}`);
     }
+    if (!["random", "wolf", "identity"].includes(forceHumanRole) || (forceHumanRole !== "random" && humanCount < 1)) {
+      throw new Error("forceHumanRole requires a human player and must be random, wolf, or identity");
+    }
     this.rng = rng;
     this.round = 1;
     this.playerCount = playerCount;
     this.wolfCount = wolfCount;
+    this.trackPosterior = trackPosterior === true;
+    this.posteriorHistory = [];
     this.rules = Object.freeze({
-      includeIdentityFunction: includeIdentityFunction !== false,
+      includeIdentityFunction: includeIdentityFunction !== false || forceHumanRole === "identity",
       requireAttackFunctionGuess: requireAttackFunctionGuess !== false,
     });
     this.phase = PHASES.INVESTIGATION;
     const wolfIndices = new Set();
-    while (wolfIndices.size < wolfCount) wolfIndices.add(Math.floor(rng() * playerCount));
+    if (forceHumanRole === "wolf") wolfIndices.add(0);
+    while (wolfIndices.size < wolfCount) {
+      const candidate = Math.floor(rng() * playerCount);
+      if (forceHumanRole === "identity" && candidate === 0) continue;
+      wolfIndices.add(candidate);
+    }
     const setup = buildBalancedFunctions([...wolfIndices], rng, playerCount, {
       includeIdentityFunction: this.rules.includeIdentityFunction,
+      identityPlayerIndex: forceHumanRole === "identity" ? 0 : null,
     });
     this.omega = setup.wolfFunction;
     this.players = Array.from({ length: playerCount }, (_, index) => ({
@@ -55,6 +66,7 @@ export class FunctionWolfGame {
     this.wolfFunctionOptions = null;
     this.outcome = null;
     this.initializeBeliefs();
+    this.recordPosteriorSnapshot("initial");
   }
 
   get wolves() { return this.players.filter((player) => player.role === "wolf"); }
@@ -75,6 +87,21 @@ export class FunctionWolfGame {
       this.suspicions.set(observer.id, distribution);
       this.reliability.set(observer.id, new Map(this.players.map((speaker) => [speaker.id, 0.58 + this.rng() * 0.24])));
     }
+  }
+
+  recordPosteriorSnapshot(label) {
+    if (!this.trackPosterior) return;
+    this.posteriorHistory.push({
+      round: this.round,
+      label,
+      values: this.players
+        .filter((player) => !player.human)
+        .map((observer) => ({
+          observerId: observer.id,
+          observerName: observer.name,
+          targets: [...(this.suspicions.get(observer.id)?.entries() ?? [])].map(([targetId, probability]) => ({ targetId, probability })),
+        })),
+    });
   }
 
   currentValue(player, input) {
