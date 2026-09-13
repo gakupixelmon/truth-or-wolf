@@ -4,10 +4,15 @@ export const DEFAULT_PLAYER_COUNT = 7;
 export const MIN_PLAYER_COUNT = 4;
 export const MAX_PLAYER_COUNT = 12;
 export const MAX_WOLF_COUNT = 3;
+export const MAX_MADMAN_COUNT = 3;
 export const DEFAULT_RULES = Object.freeze({
   includeIdentityFunction: true,
   requireAttackFunctionGuess: true,
   anonymousVoting: false,
+  revealConditionOnAttackFailure: false,
+  infectedWolfObservationAlwaysNonWolf: false,
+  madmanCount: 0,
+  madmanRandomObservation: true,
 });
 // 既存コードとの互換性を保つための既定値エイリアス。
 export const PLAYER_COUNT = DEFAULT_PLAYER_COUNT;

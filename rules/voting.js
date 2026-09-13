@@ -46,7 +46,7 @@ export function resolveVotes(game, humanVotes = new Map(), { candidateIds = null
   const votes = [];
   for (const voter of alive) {
     let choice;
-    if (voter.role === "wolf") choice = wolfChoice;
+    if (voter.role === "wolf" || voter.role === "madman") choice = wolfChoice;
     else if (voter.human) choice = humanVotes.get(voter.id) ?? "none";
     else choice = chooseCpuVote(game, voter, { candidateIds: candidates, forceCandidate: runoff });
     if (voter.infected) choice = wolfChoice;
