@@ -85,6 +85,32 @@ test("multiple wolves share W and require all wolves to be exiled", () => {
   assert.equal(game.outcome.winner, "citizen");
 });
 
+test("madmen are configurable wolf-faction roles with ordinary functions", () => {
+  const game = new FunctionWolfGame({ playerCount: 7, humanCount: 7, wolfCount: 1, madmanCount: 2, rng: seeded(122) });
+  assert.equal(game.wolves.length, 1);
+  assert.equal(game.madmen.length, 2);
+  assert.ok(game.madmen.every((player) => player.role === "madman"));
+  assert.ok(game.madmen.every((player) => player.baseFunction.id !== game.omega.id));
+  assert.equal(game.rules.madmanCount, 2);
+});
+
+test("madman observations are randomized to positive or negative", () => {
+  const game = new FunctionWolfGame({ playerCount: 7, humanCount: 7, madmanCount: 1, rng: seeded(123) });
+  const observer = game.players.find((player) => player.role === "citizen");
+  const madman = game.madmen[0];
+  const report = game.investigate(observer.id, madman.id);
+  assert.ok(["positive", "negative"].includes(report.observed.key));
+  assert.notEqual(report.observed.key, "zero");
+});
+
+test("the infected-observer rule forces a non-wolf sign when enabled", () => {
+  const game = new FunctionWolfGame({ humanCount: 7, infectedWolfObservationAlwaysNonWolf: true, rng: seeded(124) });
+  const observer = game.players.find((player) => player.role === "citizen");
+  observer.infected = true;
+  const report = game.investigate(observer.id, game.wolf.id);
+  assert.equal(report.isMatch, false);
+});
+
 test("each citizen test has false positives but all tests together isolate the wolf", () => {
   for (let seed = 1; seed <= 100; seed += 1) {
     const game = new FunctionWolfGame({ rng: seeded(seed) });
@@ -124,6 +150,32 @@ test("a wolf can choose the target sign for a private observation", () => {
   assert.equal(report.condition.targetSign, chosenSign);
   assert.equal(report.targetSign, chosenSign);
   assert.equal(report.isMatch, report.observed.key === chosenSign);
+});
+
+test("wolf faction can publish an observation for a different target", () => {
+  const game = new FunctionWolfGame({ humanCount: 7, rng: seeded(142) });
+  const wolf = game.wolf;
+  const actualTarget = game.players.find((player) => player.id !== wolf.id);
+  const publicTarget = game.players.find((player) => player.id !== wolf.id && player.id !== actualTarget.id);
+  const report = game.investigate(wolf.id, actualTarget.id);
+  game.chooseReportPublicationTarget(report, publicTarget);
+  game.publishReport(report, true);
+  assert.equal(report.target.id, actualTarget.id);
+  assert.equal(game.publicReports.at(-1).target.id, publicTarget.id);
+});
+
+test("a citizen can publish the opposite sign", () => {
+  const game = new FunctionWolfGame({ humanCount: 7, rng: seeded(143) });
+  const citizen = game.players.find((player) => player.role === "citizen");
+  const target = game.players.find((player) => player.id !== citizen.id);
+  const report = game.investigate(citizen.id, target.id);
+  const original = report.observed.key;
+  game.reverseReport(report);
+  const expected = original === "positive" ? "negative" : original === "negative" ? "positive" : "zero";
+  assert.equal(report.isMatch, expected === report.condition.targetSign);
+  assert.equal(report.reportedSign, expected === "positive" ? "+" : expected === "negative" ? "−" : "0");
+  game.publishReport(report, true);
+  assert.equal(game.publicReports.at(-1).reportedSign, report.reportedSign);
 });
 
 test("the original wolf owns exactly the publicly announced wolf function", () => {

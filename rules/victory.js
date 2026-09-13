@@ -8,9 +8,9 @@ export function checkOutcome(game, exiled = null) {
     return game.outcome;
   }
   const alive = game.alivePlayers();
-  const wolfSide = alive.filter((player) => player.role === "wolf" || player.infected).length;
+  const wolfSide = alive.filter((player) => player.role === "wolf" || player.role === "madman" || player.infected).length;
   if (wolfSide > alive.length / 2) {
-    game.outcome = { winner: "wolf", reason: `人狼と襲撃済み市民が生存者の過半数を超えた（${wolfSide}/${alive.length}）。` };
+    game.outcome = { winner: "wolf", reason: `人狼陣営（人狼・狂人）と襲撃済み市民が生存者の過半数を超えた（${wolfSide}/${alive.length}）。` };
     return game.outcome;
   }
   return null;

@@ -1,7 +1,7 @@
 import { weightedChoice } from "./probability.js";
 import { shuffle } from "./functions.js";
 
-/** 人狼が開始時点で知っている「市民側の関数の種類」の一覧。 */
+/** 人狼陣営が開始時点で知っている「人狼以外の関数の種類」の一覧。 */
 export function knownFunctionOptions(game) {
   if (!game.wolfFunctionOptions) {
     const options = new Map();
@@ -43,5 +43,5 @@ export function resolveNight(game, targetId = null, functionId = undefined) {
   game.lastAttack = { targetId: target.id, round: game.round, guessedFunctionId, success };
   game.checkOutcome();
   game.phase = game.outcome ? "ended" : "night-result";
-  return { attacked: true, success, outcome: game.outcome };
+  return { attacked: true, success, targetId: target.id, outcome: game.outcome };
 }

@@ -71,6 +71,12 @@
 .wolf-function-item span { color: var(--red-hot); font: 10px Georgia, serif; }
 .wolf-function-item b { color: var(--gold); font: 15px Georgia, "Yu Mincho", serif; }
 .wolf-function-modal { max-width: 560px; }
+.madman-truth-panel { margin-top: 14px; padding: 16px; }
+.madman-truth-panel > p { margin: 8px 0; }
+.private-history-row { display: grid; gap: 4px; padding: 8px 0; border-bottom: 1px solid var(--line-soft); font-size: 8px; line-height: 1.5; }
+.private-history-row:last-child { border-bottom: 0; }
+.private-history-row b { color: var(--red-hot); }
+.private-history-row span { color: var(--muted); }
 
 .function-main { min-height: calc(100vh - 120px); display: flex; flex-direction: column; }
 .function-main-body { padding: clamp(20px, 4vw, 38px); flex: 1; }
