@@ -15,7 +15,7 @@ export function createViews({ state }) {
   function errorMarkup() { return state.error ? `<div class="room-error">${escapeHtml(state.error)}</div>` : ""; }
 
   function setupScreen() {
-    return `<div class="shell">${header()}<div class="tutorial-select"><button id="start-tutorial-citizen" class="primary-button">市民チュートリアル</button><button id="start-tutorial-wolf" class="secondary-button">人狼チュートリアル</button></div><main class="hero function-hero"><section><div class="eyebrow">Function composition × hidden infection</div><h1>部屋を作り、<br><em>推理する。</em></h1><p class="hero-copy">部屋コードとパスワードを共有して、離れた場所のプレイヤーと関数人狼を遊べます。ゲームの秘密情報はサーバーで管理され、各プレイヤーには自分の情報だけが届きます。</p>${errorMarkup()}<div class="room-forms"><form class="room-form" id="create-room-form"><div class="panel-kicker">CREATE ROOM</div><input name="name" maxlength="24" placeholder="あなたの名前" required><input name="password" type="password" maxlength="64" placeholder="パスワード" required><label class="field-label" for="player-count">参加人数（CPUを含む）</label><input id="player-count" name="playerCount" type="number" min="4" max="12" value="7" required><label class="field-label" for="wolf-count">人狼人数</label><input id="wolf-count" name="wolfCount" type="number" min="1" max="3" value="1" required><button class="primary-button" type="submit">部屋を作る</button></form><form class="room-form" id="join-room-form"><div class="panel-kicker">JOIN ROOM</div><input name="name" maxlength="24" placeholder="あなたの名前" required><input name="code" inputmode="numeric" maxlength="6" placeholder="6桁の部屋コード" required><input name="password" type="password" maxlength="64" placeholder="パスワード" required><button class="secondary-button" type="submit">部屋に入る</button></form></div></section><aside><div class="axiom-card"><div class="axiom-index">ONLINE / W</div><div class="formula-stack"><div class="main-equation">Tᵢ(j) = Obsᵢ(Fᵢ ∘ Fⱼ)</div><div class="sub-equation">Fwolf = W</div></div><div class="axiom-rule">1つの部屋に4〜12人、人狼は1〜3人。足りない席はCPUが担当します。人狼関数Wは全員に公開されますが、個人関数と秘密条件は本人だけが知ります。</div><div class="feature-list"><div class="feature"><b>ルーム制</b>コードとパスワードで参加</div><div class="feature"><b>人数設定</b>4〜12人から選択</div><div class="feature"><b>人狼設定</b>人狼人数を選択</div><div class="feature"><b>CPU補充</b>空席は自動で参加</div></div></div></aside></main></div>`;
+    return `<div class="shell">${header()}<div class="tutorial-select"><button id="start-tutorial-citizen" class="primary-button">市民チュートリアル</button><button id="start-tutorial-wolf" class="secondary-button">人狼チュートリアル</button></div><main class="hero function-hero"><section><div class="eyebrow">Function composition × hidden infection</div><h1>部屋を作り、<br><em>推理する。</em></h1><p class="hero-copy">部屋コードとパスワードを共有して、離れた場所のプレイヤーと関数人狼を遊べます。ゲームの秘密情報はサーバーで管理され、各プレイヤーには自分の情報だけが届きます。</p>${errorMarkup()}<div class="room-forms"><form class="room-form" id="create-room-form"><div class="panel-kicker">CREATE ROOM</div><input name="name" maxlength="256" placeholder="あなたの名前" required><input name="password" type="password" maxlength="64" placeholder="パスワード" required><label class="field-label" for="player-count">参加人数（CPUを含む）</label><input id="player-count" name="playerCount" type="number" min="4" max="12" value="7" required><label class="field-label" for="wolf-count">人狼人数</label><input id="wolf-count" name="wolfCount" type="number" min="1" max="3" value="1" required><button class="primary-button" type="submit">部屋を作る</button></form><form class="room-form" id="join-room-form"><div class="panel-kicker">JOIN ROOM</div><input name="name" maxlength="24" placeholder="あなたの名前" required><input name="code" inputmode="numeric" maxlength="6" placeholder="6桁の部屋コード" required><input name="password" type="password" maxlength="64" placeholder="パスワード" required><button class="secondary-button" type="submit">部屋に入る</button></form></div></section><aside><div class="axiom-card"><div class="axiom-index">ONLINE / W</div><div class="formula-stack"><div class="main-equation">Tᵢ(j) = Obsᵢ(Fᵢ ∘ Fⱼ)</div><div class="sub-equation">Fwolf = W</div></div><div class="axiom-rule">1つの部屋に4〜12人、人狼は1〜3人。足りない席はCPUが担当します。人狼関数Wは全員に公開されますが、個人関数と秘密条件は本人だけが知ります。</div><div class="feature-list"><div class="feature"><b>ルーム制</b>コードとパスワードで参加</div><div class="feature"><b>人数設定</b>4〜12人から選択</div><div class="feature"><b>人狼設定</b>人狼人数を選択</div><div class="feature"><b>CPU補充</b>空席は自動で参加</div></div></div></aside></main></div>`;
   }
 
   function lobbyScreen() {
@@ -24,17 +24,20 @@ export function createViews({ state }) {
       ? `<div class="room-share-list"><div class="room-share-row"><span><small>ROOM CODE</small><b>${escapeHtml(room.code)}</b></span><button class="secondary-button copy-button" data-copy-value="${escapeHtml(room.code)}">コピー</button></div><div class="room-share-row"><span><small>PASSWORD</small><b>${escapeHtml(room.password)}</b></span><button class="secondary-button copy-button" data-copy-value="${escapeHtml(room.password)}">コピー</button></div></div>`
       : `<div class="room-share-list"><div class="room-share-row"><span><small>ROOM CODE</small><b>${escapeHtml(room.code)}</b></span><button class="secondary-button copy-button" data-copy-value="${escapeHtml(room.code)}">コピー</button></div><p class="waiting-note">パスワードは部屋作成者から共有してもらってください。</p></div>`;
     const settingsMarkup = room.isHost
-      ? `<form class="room-settings" id="room-player-count-form"><div class="panel-kicker">RULE SETTINGS</div><label class="field-label" for="room-player-count">参加人数（CPUを含む）</label><div class="room-settings-row"><input id="room-player-count" name="playerCount" type="number" min="4" max="12" value="${escapeHtml(room.playerCount)}" required><label class="field-label" for="room-wolf-count">人狼</label><input id="room-wolf-count" name="wolfCount" type="number" min="1" max="3" value="${escapeHtml(room.wolfCount)}" required><button class="secondary-button" type="submit">設定を更新</button></div><label class="rule-toggle"><input id="room-include-identity" type="checkbox" ${room.includeIdentityFunction ? "checked" : ""}> 市民側に恒等関数 y = x を1つ配置する</label><label class="rule-toggle"><input id="room-require-attack-guess" type="checkbox" ${room.requireAttackFunctionGuess ? "checked" : ""}> 襲撃時に対象の関数を推測する</label></form>`
+      ? `<form class="room-settings" id="room-player-count-form"><div class="panel-kicker">RULE SETTINGS</div><label class="field-label" for="room-player-count">参加人数（CPUを含む）</label><div class="room-settings-row"><input id="room-player-count" name="playerCount" type="number" min="4" max="12" value="${escapeHtml(room.playerCount)}" required><label class="field-label" for="room-wolf-count">人狼</label><input id="room-wolf-count" name="wolfCount" type="number" min="1" max="3" value="${escapeHtml(room.wolfCount)}" required><button class="secondary-button" type="submit">設定を更新</button></div><label class="rule-toggle"><input id="room-include-identity" type="checkbox" ${room.includeIdentityFunction ? "checked" : ""}> 市民側に恒等関数 y = x を1つ配置する</label><label class="rule-toggle"><input id="room-require-attack-guess" type="checkbox" ${room.requireAttackFunctionGuess ? "checked" : ""}> 襲撃時に対象の関数を推測する</label><label class="rule-toggle"><input id="room-anonymous-voting" type="checkbox" ${room.anonymousVoting ? "checked" : ""}> 投票を匿名にする（投票者と投票先の対応を非公開）</label></form>`
       : "";
-    const ruleSummary = `恒等関数 y = x：${room.includeIdentityFunction ? "あり" : "なし"}　襲撃時の関数判定：${room.requireAttackFunctionGuess ? "あり" : "なし"}`;
-    return `<div class="shell">${header()}<main class="pass-screen"><div class="pass-card room-lobby"><div class="pass-icon">∴</div><div class="eyebrow">Room waiting room</div><h2>部屋 ${escapeHtml(room.code)}</h2><p>参加人数：${room.players.length}/${room.playerCount}人　人狼：${room.wolfCount}人<br>${ruleSummary}<br>部屋番号とパスワードを共有してください。ボタンでコピーできます。</p>${passwordMarkup}${settingsMarkup}<div class="room-members">${room.players.map((player) => `<div class="room-member"><span>${escapeHtml(player.name)}</span><small>${player.isHost ? "HOST" : "参加者"}${player.connected ? " · 接続中" : " · 切断"}</small></div>`).join("")}</div>${room.isHost ? `<button class="primary-button" id="start-online-game">ゲームを開始</button>` : `<div class="waiting-note">作成者がゲームを開始するまでお待ちください。</div>`}<button class="secondary-button" id="leave-room">部屋を退出</button>${errorMarkup()}</div></main></div>`;
+    const adminMarkup = room.isAdmin
+      ? `<form class="room-settings admin-settings" id="admin-settings-form"><div class="panel-kicker">ADMIN LAB</div><label class="field-label" for="admin-force-role">自分の固定設定</label><select id="admin-force-role" name="forceHumanRole"><option value="random" ${room.adminConfig?.forceHumanRole === "random" ? "selected" : ""}>通常（ランダム）</option><option value="wolf" ${room.adminConfig?.forceHumanRole === "wolf" ? "selected" : ""}>必ず人狼</option><option value="identity" ${room.adminConfig?.forceHumanRole === "identity" ? "selected" : ""}>市民かつ y = x</option></select><label class="rule-toggle"><input id="admin-track-posterior" type="checkbox" ${room.adminConfig?.trackPosterior ? "checked" : ""}> CPUの事後確率の推移を記録する</label><button class="secondary-button" type="submit">管理者設定を更新</button></form>`
+      : "";
+    const ruleSummary = `恒等関数 y = x：${room.includeIdentityFunction ? "あり" : "なし"}　襲撃時の関数判定：${room.requireAttackFunctionGuess ? "あり" : "なし"}　投票匿名性：${room.anonymousVoting ? "あり" : "なし"}`;
+    return `<div class="shell">${header()}<main class="pass-screen"><div class="pass-card room-lobby"><div class="pass-icon">∴</div><div class="eyebrow">Room waiting room</div><h2>部屋 ${escapeHtml(room.code)}</h2><p>参加人数：${room.players.length}/${room.playerCount}人　人狼：${room.wolfCount}人<br>${ruleSummary}<br>部屋番号とパスワードを共有してください。ボタンでコピーできます。</p>${passwordMarkup}${settingsMarkup}${adminMarkup}<div class="room-members">${room.players.map((player) => `<div class="room-member"><span>${escapeHtml(player.name)}</span><small>${player.isHost ? "HOST" : "参加者"}${player.connected ? " · 接続中" : " · 切断"}</small></div>`).join("")}</div>${room.isHost ? `<button class="primary-button" id="start-online-game">ゲームを開始</button>` : `<div class="waiting-note">作成者がゲームを開始するまでお待ちください。</div>`}<button class="secondary-button" id="leave-room">部屋を退出</button>${errorMarkup()}</div></main></div>`;
   }
 
   function functionPlayer(player) {
     const mine = state.game.myPlayerId === player.id;
     // 自分の場合で、かつ関数情報（myFunction）が届いていれば関数名を表示する。
     // privateAction は投票フェーズなどで関数情報を含まないターンに上書きされるため、
-    // 一度届いた自分の関数は myFunction に保持しておく。
+    // 一度届いた自分の関数・代入条件は privateAction が切り替わっても保持しておく。
     let expression = `F${player.id.slice(1)}(x) = ?`;
     if (mine && state.myFunction) {
       expression = escapeHtml(state.myFunction.label);
@@ -42,13 +45,25 @@ export function createViews({ state }) {
       // チュートリアル用のフォールバック
       expression = escapeHtml(player.baseFunction.label);
     }
-    
-    return `<div class="function-player ${player.alive ? "" : "dead"}"><div class="function-player-top"><span class="function-player-name">${player.alive ? "" : "† "}${escapeHtml(player.name)}${mine ? "（あなた）" : ""}</span>${player.human ? `<span class="human-badge">ONLINE</span>` : `<span class="human-badge">CPU</span>`}</div><div class="function-expression">${expression}</div><div class="function-family">秘密関数は本人だけが知る</div></div>`;
+    const ownCondition = state.myCondition ?? (mine ? player.condition : null);
+    const condition = mine && ownCondition
+      ? `<div class="function-condition">代入条件：${escapeHtml(ownCondition.label)}</div>`
+      : "";
+    return `<div class="function-player ${player.alive ? "" : "dead"}"><div class="function-player-top"><span class="function-player-name">${player.alive ? "" : "† "}${escapeHtml(player.name)}${mine ? "（あなた）" : ""}</span>${player.human ? `<span class="human-badge">ONLINE</span>` : `<span class="human-badge">CPU</span>`}</div><div class="function-expression">${expression}</div>${condition}<div class="function-family">秘密関数は本人だけが知る</div></div>`;
   }
 
   function leftPanel() {
     const game = state.game;
-    return `<aside class="function-left"><section class="panel omega-card"><div class="panel-kicker">Known wolf function</div><div class="panel-title">人狼関数 W</div><div class="omega-expression">${escapeHtml(game.omegaLabel)}</div><div class="omega-note">この定義だけは全員の共通知識です。元の人狼は、この関数そのものを持っています。</div><div class="omega-symbol">W</div></section><section class="panel"><div class="panel-head"><div class="panel-kicker">Players</div><div class="panel-title">参加者</div></div><div class="function-roster">${game.players.map(functionPlayer).join("")}</div></section></aside>`;
+    const wolfListButton = state.myRole === "wolf" && state.wolfFunctionOptions?.length
+      ? `<button class="secondary-button wolf-function-list-button" id="show-wolf-function-list">市民側の関数一覧を見る</button>`
+      : "";
+    return `<aside class="function-left"><section class="panel omega-card"><div class="panel-kicker">Known wolf function</div><div class="panel-title">人狼関数 W</div><div class="omega-expression">${escapeHtml(game.omegaLabel)}</div><div class="omega-note">この定義だけは全員の共通知識です。元の人狼は、この関数そのものを持っています。</div><div class="omega-symbol">W</div>${wolfListButton}</section><section class="panel"><div class="panel-head"><div class="panel-kicker">Players</div><div class="panel-title">参加者</div></div><div class="function-roster">${game.players.map(functionPlayer).join("")}</div></section></aside>`;
+  }
+
+  function wolfFunctionListModal() {
+    if (!state.showWolfFunctionList || state.myRole !== "wolf" || !state.wolfFunctionOptions?.length) return "";
+    const options = state.wolfFunctionOptions.map((option, index) => `<div class="wolf-function-item"><span>${String(index + 1).padStart(2, "0")}</span><b>${escapeHtml(option.label)}</b></div>`).join("");
+    return `<div class="modal-backdrop"><div class="modal wolf-function-modal"><div class="modal-icon">W</div><div class="eyebrow">Private wolf reference</div><h2>市民側の関数一覧</h2><p>この一覧は人狼であるあなたにだけ表示されています。どのプレイヤーがどの関数かは分かりません。</p><div class="wolf-function-list">${options}</div><button class="secondary-button" id="close-wolf-function-list">ゲーム画面に戻る</button></div></div>`;
   }
 
   function reportsMarkup() {
@@ -67,16 +82,21 @@ export function createViews({ state }) {
     const action = state.privateAction;
     if (state.game.submitted) return waitingCard("観測を送信しました", "他のプレイヤーの観測が揃うまでお待ちください。");
     if (!action || action.kind !== "investigation" || action.playerId !== state.game.myPlayerId) return waitingCard("他のプレイヤーの観測中", "自分の観測を送信すると、他の人を待たずに待機できます。");
-    const signOptions = action.role === "wolf"
-      ? `<div class="condition-box"><div class="condition-label">TARGET SIGN TO ANNOUNCE</div><div class="condition-value">公開する目標符号を選択してください（現在：${escapeHtml(signText(state.targetSignChoice ?? action.condition.targetSign))}）</div><div class="target-grid sign-targets">${(action.targetSignOptions ?? []).map((sign) => `<button class="target-button ${(state.targetSignChoice ?? action.condition.targetSign) === sign ? "selected" : ""}" data-target-sign="${escapeHtml(sign)}">${escapeHtml(signText(sign))}<span class="function-mini">${sign === "positive" ? "+" : sign === "negative" ? "−" : "0"}</span></button>`).join("")}</div></div>`
-      : `<div class="condition-box"><div class="condition-label">YOUR TARGET SIGN</div><div class="condition-value">${escapeHtml(signText(action.condition.targetSign))}</div></div>`;
-    return `<div class="action-card"><span class="private-role">${action.role === "wolf" ? "元の人狼" : "市民"}</span><h3>あなたの秘密観測</h3><p>自分の関数を外側、指名相手の関数を内側として合成します。発表時には目標符号も公開されます。</p>${privateFunctionMarkup(action)}<div class="condition-box"><div class="condition-label">YOUR TEST</div><div class="condition-value">${escapeHtml(action.condition.label)}</div></div>${signOptions}<div class="target-grid function-targets">${action.targets.map((target) => `<button class="target-button" data-investigate="${escapeHtml(target.id)}">${escapeHtml(target.name)}<span class="function-mini">秘密関数</span></button>`).join("")}</div></div>`;
+    const targetHint = action.role === "wolf"
+      ? "観測結果を確認した後、公開する目標符号を選択できます。"
+      : `目標符号は「${signText(action.condition.targetSign)}」です。`;
+    return `<div class="action-card"><span class="private-role">${action.role === "wolf" ? "元の人狼" : "市民"}</span><h3>あなたの秘密観測</h3><p>自分の関数を外側、指名相手の関数を内側として合成します。${targetHint}</p>${privateFunctionMarkup(action)}<div class="condition-box"><div class="condition-label">YOUR TEST</div><div class="condition-value">${escapeHtml(action.condition.label)}</div></div><div class="target-grid function-targets">${action.targets.map((target) => `<button class="target-button" data-investigate="${escapeHtml(target.id)}">${escapeHtml(target.name)}<span class="function-mini">秘密関数</span></button>`).join("")}</div></div>`;
   }
 
   function observationView() {
     const report = state.observation;
     if (!report) return investigationView();
-    return `<div class="action-card"><span class="private-role">PRIVATE RESULT</span><h3>${escapeHtml(report.target.name)}の合成演算</h3><p>目標符号は「${signText(report.condition.targetSign)}」。この一件だけでは偽陽性と区別できません。公開されるのは符号だけです。</p><div class="condition-box"><div class="condition-label">Fself ∘ Ftarget</div><div class="condition-value">${escapeHtml(report.condition.label)}</div></div><div class="result-value">${escapeHtml(report.observed.display)}</div><div class="action-buttons"><button class="primary-button" data-publish="yes">符号を公開する</button>${state.privateAction?.role === "wolf" ? `<button class="danger-button" data-publish="lie">逆の符号を公開</button>` : ""}<button class="secondary-button" data-publish="no">結果を伏せる</button></div></div>`;
+    const wolfSelecting = state.privateAction?.role === "wolf";
+    const signOptions = wolfSelecting
+      ? `<div class="condition-box"><div class="condition-label">TARGET SIGN TO ANNOUNCE</div><div class="condition-value">観測結果を見た後で、公開する目標符号を選択してください。</div><div class="target-grid sign-targets">${(state.privateAction.targetSignOptions ?? []).map((sign) => `<button class="target-button ${state.targetSignChoice === sign ? "selected" : ""}" data-target-sign="${escapeHtml(sign)}">${escapeHtml(signText(sign))}<span class="function-mini">${sign === "positive" ? "+" : sign === "negative" ? "−" : "0"}</span></button>`).join("")}</div></div>`
+      : `<div class="condition-box"><div class="condition-label">TARGET SIGN</div><div class="condition-value">${escapeHtml(signText(report.condition.targetSign))}</div></div>`;
+    const publishDisabled = wolfSelecting && !state.targetSignChoice ? "disabled" : "";
+    return `<div class="action-card"><span class="private-role">PRIVATE RESULT</span><h3>${escapeHtml(report.target.name)}の合成演算</h3><p>観測結果を確認しました。公開時には目標符号も発表されます。この一件だけでは偽陽性と区別できません。</p><div class="condition-box"><div class="condition-label">Fself ∘ Ftarget</div><div class="condition-value">${escapeHtml(report.condition.label)}</div></div><div class="result-value">${escapeHtml(report.observed.display)}</div>${signOptions}<div class="action-buttons"><button class="primary-button" data-publish="yes" ${publishDisabled}>符号を公開する</button>${wolfSelecting ? `<button class="danger-button" data-publish="lie" ${publishDisabled}>逆の符号を公開</button>` : ""}<button class="secondary-button" data-publish="no">結果を伏せる</button></div></div>`;
   }
 
   function discussionView() { return `<div class="round-intro"><div class="panel-kicker">Shared observations</div><h2>符号の公開</h2><p>公開された符号が目標符号と一致していても、市民による偽陽性の可能性があります。複数の結果を組み合わせてください。</p></div>${reportsMarkup()}<div class="action-buttons">${state.game.isHost ? `<button class="primary-button" id="begin-vote">投票を開始</button>` : `<span class="waiting-note">部屋主が投票を開始します</span>`}</div>`; }
@@ -85,7 +105,12 @@ export function createViews({ state }) {
     const action = state.privateAction;
     if (state.game.submitted) return waitingCard("投票を送信しました", "他のプレイヤーの投票が揃うまでお待ちください。");
     if (!action || action.kind !== "vote" || action.playerId !== state.game.myPlayerId) return waitingCard("他のプレイヤーの投票中", "自分の投票を送信すると、他の人を待たずに待機できます。");
-    return `<div class="action-card"><span class="private-role">${action.role === "wolf" ? "元の人狼" : "市民"}</span><h3>あなたの投票</h3><p>追放する相手を選んでください。追放しないこともできます。</p><div class="target-grid function-targets">${action.targets.map((target) => `<button class="target-button" data-vote="${escapeHtml(target.id)}">${escapeHtml(target.name)}</button>`).join("")}<button class="target-button" data-vote="none">∅ 追放しない</button></div></div>`;
+    const runoff = (state.game.voteRound ?? action.voteRound ?? 1) > 1;
+    const instruction = runoff
+      ? "同数だった候補だけで再投票します。候補者の中から1人を選んでください。"
+      : "追放する相手を選んでください。追放しないこともできます。";
+    const noExile = runoff ? "" : `<button class="target-button" data-vote="none">∅ 追放しない</button>`;
+    return `<div class="action-card"><span class="private-role">${action.role === "wolf" ? "元の人狼" : "市民"}</span><h3>${runoff ? "再投票" : "あなたの投票"}</h3><p>${instruction}</p><div class="target-grid function-targets">${action.targets.map((target) => `<button class="target-button" data-vote="${escapeHtml(target.id)}">${escapeHtml(target.name)}</button>`).join("")}${noExile}</div></div>`;
   }
 
   function tallyMarkup(result) {
@@ -94,11 +119,27 @@ export function createViews({ state }) {
     return `<div class="tally">${Object.entries(result.tally).sort((a, b) => b[1] - a[1]).map(([choice, count]) => { const label = choice === "none" ? "追放しない" : state.game.players.find((player) => player.id === choice)?.name ?? choice; return `<div class="tally-row"><span>${escapeHtml(label)}</span><div class="tally-bar"><div class="tally-fill" style="width:${total ? count / total * 100 : 0}%"></div></div><b>${count}</b></div>`; }).join("")}</div>`;
   }
 
+  function voteDetailsMarkup(result) {
+    if (!result) return "";
+    if (result.anonymous || !Array.isArray(result.votes)) {
+      return `<div class="vote-anonymity-note">匿名投票のため、投票者と投票先の対応は非公開です。</div>`;
+    }
+    const rows = result.votes.map((vote) => {
+      const voter = state.game.players.find((player) => player.id === vote.voterId)?.name ?? vote.voterId;
+      const choice = vote.choice === "none"
+        ? "追放しない"
+        : state.game.players.find((player) => player.id === vote.choice)?.name ?? vote.choice;
+      return `<div class="vote-detail-row"><span>${escapeHtml(voter)}</span><span>→</span><b>${escapeHtml(choice)}</b></div>`;
+    }).join("");
+    return `<div class="vote-details"><div class="condition-label">個別投票</div>${rows}</div>`;
+  }
+
   function voteResultView() {
     const result = state.game.voteResult;
-    const text = result?.exiled ? `${result.exiled.name}が追放されました。${result.exiled.role === "wolf" ? "元の人狼でした。" : "元の人狼ではありませんでした。"}` : "この日は誰も追放されませんでした。";
+    const runoffText = result?.runoff ? "初回投票が同数だったため、候補者だけで再投票しました。" : "";
+    const text = result?.exiled ? `${runoffText}${result.exiled.name}が追放されました。${result.exiled.role === "wolf" ? "元の人狼でした。" : "元の人狼ではありませんでした。"}` : `${runoffText}この日は誰も追放されませんでした。`;
     const privateReveal = state.exileReveal ? `<div class="condition-box"><div class="condition-label">WOLF-ONLY REVEAL</div><div class="condition-value"><b>${escapeHtml(state.exileReveal.playerName)}</b>の関数：${escapeHtml(state.exileReveal.function.label)}<br>x = ${escapeHtml(state.exileReveal.substitutionInput)} を代入<br><span class="function-mini">${escapeHtml(state.exileReveal.conditionLabel)}</span></div></div>` : "";
-    return `<div class="action-card"><span class="private-role">VOTE RESULT</span><h3>投票結果</h3><p>${escapeHtml(text)}</p>${tallyMarkup(result)}${privateReveal}<div class="action-buttons">${state.game.isHost ? `<button class="primary-button" id="begin-night">夜へ進む</button>` : `<span class="waiting-note">部屋主が夜を開始します</span>`}</div></div>`;
+    return `<div class="action-card"><span class="private-role">VOTE RESULT</span><h3>投票結果</h3><p>${escapeHtml(text)}</p>${tallyMarkup(result)}${voteDetailsMarkup(result)}${privateReveal}<div class="action-buttons">${state.game.isHost ? `<button class="primary-button" id="begin-night">夜へ進む</button>` : `<span class="waiting-note">部屋主が夜を開始します</span>`}</div></div>`;
   }
 
   function nightView() {
@@ -113,10 +154,10 @@ export function createViews({ state }) {
     const target = action.targets.find((candidate) => candidate.id === state.nightTargetId);
     if (!target) return waitingCard("襲撃対象を確認中", "対象が更新されました。もう一度選び直してください。");
     if (!action.requiresFunctionGuess) {
-      return `<div class="action-card"><span class="private-role">元の人狼</span><h3>${escapeHtml(target.name)}を襲撃</h3><p>このルールでは対象の関数を推測せず、選んだ対象をそのまま襲撃します。</p><div class="condition-box"><div class="condition-label">SELECTED TARGET</div><div class="condition-value">${escapeHtml(target.name)}</div></div><div class="action-buttons"><button class="danger-button" data-attack-direct="${escapeHtml(target.id)}">この対象を襲撃</button><button class="secondary-button" id="cancel-attack-target">対象を選び直す</button></div></div>`;
+      return `<div class="action-card"><span class="private-role">元の人狼</span><h3>${escapeHtml(target.name)}を襲撃</h3><p>このルールでは対象の関数を推測せず、選んだ対象をそのまま襲撃します。</p><div class="condition-box"><div class="condition-label">SELECTED TARGET</div><div class="condition-value">${escapeHtml(target.name)}</div></div><div class="action-buttons"><button class="danger-button" data-attack-direct="${escapeHtml(target.id)}">この対象を襲撃</button><button class="secondary-button" data-attack-back>人の選択に戻る</button></div></div>`;
     }
     const options = action.functionOptions ?? [];
-    return `<div class="action-card"><span class="private-role">元の人狼</span><h3>${escapeHtml(target.name)}の関数を推測</h3><p>この推測が的中した場合だけ、対象の関数に W が合成されます。</p><div class="condition-box"><div class="condition-label">SELECTED TARGET</div><div class="condition-value">${escapeHtml(target.name)}</div></div><div class="target-grid function-targets">${options.map((option) => `<button class="target-button" data-attack-function="${escapeHtml(option.id)}">${escapeHtml(option.label)}</button>`).join("")}</div><div class="action-buttons"><button class="secondary-button" id="cancel-attack-target">対象を選び直す</button></div></div>`;
+    return `<div class="action-card"><span class="private-role">元の人狼</span><h3>${escapeHtml(target.name)}の関数を推測</h3><p>この推測が的中した場合だけ、対象の関数に W が合成されます。</p><div class="condition-box"><div class="condition-label">SELECTED TARGET</div><div class="condition-value">${escapeHtml(target.name)}</div></div><div class="target-grid function-targets">${options.map((option) => `<button class="target-button" data-attack-function="${escapeHtml(option.id)}">${escapeHtml(option.label)}</button>`).join("")}</div><div class="action-buttons"><button class="secondary-button" data-attack-back>人の選択に戻る</button></div></div>`;
   }
 
   function nightResultView() {
@@ -135,18 +176,28 @@ export function createViews({ state }) {
     if (!outcome) return "";
     const reveal = (state.game.reveal ?? []).map((player) => `<div class="outcome-person"><b>${escapeHtml(player.name)}</b><span>${player.role === "wolf" ? "元の人狼" : player.infected ? "襲撃済み市民" : "市民"}<br>${escapeHtml(player.functionLabel)}</span></div>`).join("");
     const attackResult = state.attackResult ? `<p class="condition-value">今回の襲撃：${state.attackResult.success ? "成功" : "失敗"}</p>` : "";
-    const finalVote = state.game.voteResult ? `<section class="outcome-vote"><div class="panel-kicker">FINAL VOTE</div><h3>最終投票結果</h3>${tallyMarkup(state.game.voteResult)}</section>` : "";
+    const finalVote = state.game.voteResult ? `<section class="outcome-vote"><div class="panel-kicker">FINAL VOTE</div><h3>最終投票結果</h3>${tallyMarkup(state.game.voteResult)}${voteDetailsMarkup(state.game.voteResult)}</section>` : "";
+    const adminRestartMarkup = state.room?.isAdmin
+      ? `<label class="field-label" for="restart-force-role">管理者固定設定</label><select id="restart-force-role"><option value="random" ${state.room.adminConfig?.forceHumanRole === "random" ? "selected" : ""}>通常（ランダム）</option><option value="wolf" ${state.room.adminConfig?.forceHumanRole === "wolf" ? "selected" : ""}>必ず人狼</option><option value="identity" ${state.room.adminConfig?.forceHumanRole === "identity" ? "selected" : ""}>市民かつ y = x</option></select><label class="rule-toggle"><input id="restart-track-posterior" type="checkbox" ${state.room.adminConfig?.trackPosterior ? "checked" : ""}> CPUの事後確率の推移を記録する</label>`
+      : "";
     const restartAction = state.game.isHost
-      ? `<div class="room-settings outcome-restart"><label class="field-label" for="restart-player-count">再戦人数（CPUを含む）</label><div class="room-settings-row"><input id="restart-player-count" type="number" min="4" max="12" value="${escapeHtml(state.room?.playerCount ?? state.game.playerCount ?? state.game.players.length)}" required><label class="field-label" for="restart-wolf-count">人狼</label><input id="restart-wolf-count" type="number" min="1" max="3" value="${escapeHtml(state.room?.wolfCount ?? state.game.wolfCount ?? 1)}" required><button class="primary-button" id="restart-room">この部屋で再戦</button></div><label class="rule-toggle"><input id="restart-include-identity" type="checkbox" ${(state.room?.includeIdentityFunction ?? state.game.rules?.includeIdentityFunction ?? true) ? "checked" : ""}> 市民側に恒等関数 y = x を1つ配置する</label><label class="rule-toggle"><input id="restart-require-attack-guess" type="checkbox" ${(state.room?.requireAttackFunctionGuess ?? state.game.rules?.requireAttackFunctionGuess ?? true) ? "checked" : ""}> 襲撃時に対象の関数を推測する</label></div>`
+      ? `<div class="room-settings outcome-restart"><label class="field-label" for="restart-player-count">再戦人数（CPUを含む）</label><div class="room-settings-row"><input id="restart-player-count" type="number" min="4" max="12" value="${escapeHtml(state.room?.playerCount ?? state.game.playerCount ?? state.game.players.length)}" required><label class="field-label" for="restart-wolf-count">人狼</label><input id="restart-wolf-count" type="number" min="1" max="3" value="${escapeHtml(state.room?.wolfCount ?? state.game.wolfCount ?? 1)}" required><button class="primary-button" id="restart-room">この部屋で再戦</button></div><label class="rule-toggle"><input id="restart-include-identity" type="checkbox" ${(state.room?.includeIdentityFunction ?? state.game.rules?.includeIdentityFunction ?? true) ? "checked" : ""}> 市民側に恒等関数 y = x を1つ配置する</label><label class="rule-toggle"><input id="restart-require-attack-guess" type="checkbox" ${(state.room?.requireAttackFunctionGuess ?? state.game.rules?.requireAttackFunctionGuess ?? true) ? "checked" : ""}> 襲撃時に対象の関数を推測する</label><label class="rule-toggle"><input id="restart-anonymous-voting" type="checkbox" ${(state.room?.anonymousVoting ?? state.game.rules?.anonymousVoting ?? false) ? "checked" : ""}> 投票を匿名にする</label>${adminRestartMarkup}</div>`
       : `<p class="waiting-note">部屋主が再戦を開始するまでお待ちください。</p>`;
     return `<div class="modal-backdrop"><div class="modal"><div class="modal-icon">${outcome.winner === "citizen" ? "∴" : "W"}</div><div class="eyebrow">Protocol concluded</div><h2>${outcome.winner === "citizen" ? "市民側の勝利" : "人狼側の勝利"}</h2><p>${escapeHtml(outcome.reason)}</p>${attackResult}${finalVote}<div class="outcome-reveal">${reveal}</div>${restartAction}<p class="waiting-note">部屋を退出すると、別の部屋に参加できます。</p><button class="secondary-button" id="leave-room">部屋を退出</button></div></div>`;
+  }
+
+  function posteriorMarkup() {
+    const history = state.game.posteriorHistory;
+    if (!state.game.admin || !history?.length) return "";
+    const snapshots = [...history].reverse().map((snapshot) => `<details class="posterior-snapshot"><summary>${escapeHtml(snapshot.label)} · ROUND ${snapshot.round}</summary>${snapshot.values.map((entry) => `<div class="posterior-observer"><b>${escapeHtml(entry.observerName)}</b>${entry.targets.filter((target) => target.targetId !== entry.observerId).map((target) => `<span>${escapeHtml(state.game.players.find((player) => player.id === target.targetId)?.name ?? target.targetId)} ${Math.round(target.probability * 100)}%</span>`).join("")}</div>`).join("")}</details>`).join("");
+    return `<section class="panel posterior-panel"><div class="panel-head"><div class="panel-kicker">ADMIN LAB</div><div class="panel-title">CPU事後確率の推移</div></div>${snapshots}</section>`;
   }
 
   function rightPanel() {
     const roomCode = state.room?.code ?? "TUTORIAL";
     const progress = state.game.phase === "investigation" || state.game.phase === "vote" ? `未送信 ${state.game.pendingCount}人` : state.game.activePlayerName ? `${state.game.activePlayerName}の操作中` : "公開情報";
     const attackRule = state.game.rules?.requireAttackFunctionGuess === false ? "対象を選ぶだけで襲撃が成立する。" : "襲撃対象と関数推測が一致したときだけ秘密合成。";
-    return `<aside class="function-right"><section class="panel"><div class="panel-head"><div class="panel-kicker">Protocol</div><div class="panel-title">進行状況</div></div><div class="rule-list"><div class="rule-item"><div class="rule-number">ROOM</div><div class="rule-text">${escapeHtml(roomCode)} · ${escapeHtml(progress)}</div></div><div class="rule-item"><div class="rule-number">01</div><div class="rule-text">Wを個人関数として持つ元人狼を追放すれば市民側の勝利。</div></div><div class="rule-item"><div class="rule-number">02</div><div class="rule-text">調査は Fself ∘ Ftarget を秘密条件で評価する。</div></div><div class="rule-item"><div class="rule-number">03</div><div class="rule-text">襲撃済み市民の投票は元人狼の投票先へ自動置換。</div></div><div class="rule-item"><div class="rule-number">04</div><div class="rule-text">${attackRule}</div></div></div></section></aside>`;
+    return `<aside class="function-right"><section class="panel"><div class="panel-head"><div class="panel-kicker">Protocol</div><div class="panel-title">進行状況</div></div><div class="rule-list"><div class="rule-item"><div class="rule-number">ROOM</div><div class="rule-text">${escapeHtml(roomCode)} · ${escapeHtml(progress)}</div></div><div class="rule-item"><div class="rule-number">01</div><div class="rule-text">Wを個人関数として持つ元人狼を追放すれば市民側の勝利。</div></div><div class="rule-item"><div class="rule-number">02</div><div class="rule-text">調査は Fself ∘ Ftarget を秘密条件で評価する。</div></div><div class="rule-item"><div class="rule-number">03</div><div class="rule-text">襲撃済み市民の投票は元人狼の投票先へ自動置換。</div></div><div class="rule-item"><div class="rule-number">04</div><div class="rule-text">${attackRule}</div></div></div></section>${posteriorMarkup()}</aside>`;
   }
 
   function mainContent() {
@@ -161,7 +212,7 @@ export function createViews({ state }) {
 
   function board() {
     const game = state.game;
-    return `<div class="shell">${header()}<div class="function-board">${leftPanel()}<main class="panel function-main"><div class="panel-head discussion-head"><div><div class="panel-kicker">Function village · ROOM ${escapeHtml(state.room.code)}</div><div class="panel-title">ROUND ${game.round}</div></div><div class="phase-badge">${phaseLabel(game.phase)}</div></div><div class="function-main-body">${errorMarkup()}${mainContent()}</div></main>${rightPanel()}</div>${outcomeModal()}</div>`;
+    return `<div class="shell">${header()}<div class="function-board">${leftPanel()}<main class="panel function-main"><div class="panel-head discussion-head"><div><div class="panel-kicker">Function village · ROOM ${escapeHtml(state.room.code)}</div><div class="panel-title">ROUND ${game.round}</div></div><div class="phase-badge">${phaseLabel(game.phase)}</div></div><div class="function-main-body">${errorMarkup()}${mainContent()}</div></main>${rightPanel()}</div>${outcomeModal()}${wolfFunctionListModal()}</div>`;
   }
 
   return { header, errorMarkup, setupScreen, lobbyScreen, leftPanel, rightPanel, board };

@@ -1,6 +1,6 @@
 import { DEFAULT_PLAYER_COUNT, DEFAULT_RULES, INPUT_COUNT, FUNCTION_NAMES, MAX_PLAYER_COUNT, MAX_WOLF_COUNT, MIN_PLAYER_COUNT, PHASES } from "./rules/constants.js";
 import { buildBalancedFunctions } from "./rules/functions.js";
-import { investigate, publishReport, runCpuInvestigations, updateSuspicion } from "./rules/investigation.js";
+import { chooseReportTargetSign, investigate, publishReport, runCpuInvestigations, updateSuspicion } from "./rules/investigation.js";
 import { resolveVotes } from "./rules/voting.js";
 import { knownFunctionOptions, resolveNight } from "./rules/infection.js";
 import { checkOutcome } from "./rules/victory.js";
@@ -9,7 +9,7 @@ export { DEFAULT_RULES, INPUT_COUNT, FUNCTION_NAMES } from "./rules/constants.js
 
 /** ゲーム状態の保持を担当するファサード。ルール本体は rules/ 以下に分離。 */
 export class FunctionWolfGame {
-  constructor({ humanCount = 1, playerCount = DEFAULT_PLAYER_COUNT, wolfCount = 1, rng = Math.random, includeIdentityFunction = DEFAULT_RULES.includeIdentityFunction, requireAttackFunctionGuess = DEFAULT_RULES.requireAttackFunctionGuess } = {}) {
+  constructor({ humanCount = 1, playerCount = DEFAULT_PLAYER_COUNT, wolfCount = 1, rng = Math.random, includeIdentityFunction = DEFAULT_RULES.includeIdentityFunction, requireAttackFunctionGuess = DEFAULT_RULES.requireAttackFunctionGuess, forceHumanRole = "random", trackPosterior = false } = {}) {
     if (!Number.isInteger(playerCount) || playerCount < MIN_PLAYER_COUNT || playerCount > MAX_PLAYER_COUNT) {
       throw new Error(`playerCount must be between ${MIN_PLAYER_COUNT} and ${MAX_PLAYER_COUNT}`);
     }
@@ -20,19 +20,30 @@ export class FunctionWolfGame {
     if (!Number.isInteger(wolfCount) || wolfCount < 1 || wolfCount > maxWolves) {
       throw new Error(`wolfCount must be between 1 and ${maxWolves}`);
     }
+    if (!["random", "wolf", "identity"].includes(forceHumanRole) || (forceHumanRole !== "random" && humanCount < 1)) {
+      throw new Error("forceHumanRole requires a human player and must be random, wolf, or identity");
+    }
     this.rng = rng;
     this.round = 1;
     this.playerCount = playerCount;
     this.wolfCount = wolfCount;
+    this.trackPosterior = trackPosterior === true;
+    this.posteriorHistory = [];
     this.rules = Object.freeze({
-      includeIdentityFunction: includeIdentityFunction !== false,
+      includeIdentityFunction: includeIdentityFunction !== false || forceHumanRole === "identity",
       requireAttackFunctionGuess: requireAttackFunctionGuess !== false,
     });
     this.phase = PHASES.INVESTIGATION;
     const wolfIndices = new Set();
-    while (wolfIndices.size < wolfCount) wolfIndices.add(Math.floor(rng() * playerCount));
+    if (forceHumanRole === "wolf") wolfIndices.add(0);
+    while (wolfIndices.size < wolfCount) {
+      const candidate = Math.floor(rng() * playerCount);
+      if (forceHumanRole === "identity" && candidate === 0) continue;
+      wolfIndices.add(candidate);
+    }
     const setup = buildBalancedFunctions([...wolfIndices], rng, playerCount, {
       includeIdentityFunction: this.rules.includeIdentityFunction,
+      identityPlayerIndex: forceHumanRole === "identity" ? 0 : null,
     });
     this.omega = setup.wolfFunction;
     this.players = Array.from({ length: playerCount }, (_, index) => ({
@@ -55,6 +66,7 @@ export class FunctionWolfGame {
     this.wolfFunctionOptions = null;
     this.outcome = null;
     this.initializeBeliefs();
+    this.recordPosteriorSnapshot("initial");
   }
 
   get wolves() { return this.players.filter((player) => player.role === "wolf"); }
@@ -77,6 +89,21 @@ export class FunctionWolfGame {
     }
   }
 
+  recordPosteriorSnapshot(label) {
+    if (!this.trackPosterior) return;
+    this.posteriorHistory.push({
+      round: this.round,
+      label,
+      values: this.players
+        .filter((player) => !player.human)
+        .map((observer) => ({
+          observerId: observer.id,
+          observerName: observer.name,
+          targets: [...(this.suspicions.get(observer.id)?.entries() ?? [])].map(([targetId, probability]) => ({ targetId, probability })),
+        })),
+    });
+  }
+
   currentValue(player, input) {
     const baseValue = player.baseFunction.evaluate(input);
     return player.infected ? this.omega.evaluate(baseValue) : baseValue;
@@ -95,7 +122,8 @@ export class FunctionWolfGame {
       .map((target) => target.id);
   }
 
-  investigate(observerId, targetId, targetSignOverride) { return investigate(this, observerId, targetId, targetSignOverride); }
+  investigate(observerId, targetId) { return investigate(this, observerId, targetId); }
+  chooseReportTargetSign(report, targetSign) { return chooseReportTargetSign(report, targetSign); }
   updateSuspicion(observerId, targetId, positive, trust = 1) { return updateSuspicion(this, observerId, targetId, positive, trust); }
   publishReport(report, published = true) { return publishReport(this, report, published); }
   runCpuInvestigations() { return runCpuInvestigations(this); }
@@ -107,7 +135,7 @@ export class FunctionWolfGame {
     return observers.reduce((sum, observer) => sum + this.suspicions.get(observer.id).get(targetId), 0) / observers.length;
   }
 
-  resolveVotes(humanVotes = new Map()) { return resolveVotes(this, humanVotes); }
+  resolveVotes(humanVotes = new Map(), options = {}) { return resolveVotes(this, humanVotes, options); }
   resolveNight(targetId = null, functionId = undefined) { return resolveNight(this, targetId, functionId); }
   knownFunctionOptions() { return knownFunctionOptions(this); }
   checkOutcome(exiled = null) { return checkOutcome(this, exiled); }

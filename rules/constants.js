@@ -7,6 +7,7 @@ export const MAX_WOLF_COUNT = 3;
 export const DEFAULT_RULES = Object.freeze({
   includeIdentityFunction: true,
   requireAttackFunctionGuess: true,
+  anonymousVoting: false,
 });
 // 既存コードとの互換性を保つための既定値エイリアス。
 export const PLAYER_COUNT = DEFAULT_PLAYER_COUNT;

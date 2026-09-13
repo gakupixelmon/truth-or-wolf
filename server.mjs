@@ -1,13 +1,21 @@
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
-import { randomInt } from "node:crypto";
+import { randomInt, timingSafeEqual } from "node:crypto";
 import { Server } from "socket.io";
 import { FunctionWolfGame } from "./function-game.js";
 import { DEFAULT_PLAYER_COUNT, DEFAULT_RULES, MAX_PLAYER_COUNT, MAX_WOLF_COUNT, MIN_PLAYER_COUNT } from "./rules/constants.js";
-import { TARGET_SIGN_KEYS } from "./rules/investigation.js";
+import { TARGET_SIGN_KEYS, chooseReportTargetSign } from "./rules/investigation.js";
+
+try {
+  process.loadEnvFile?.();
+} catch {
+  // .env is optional; deployment environments can provide variables directly.
+}
 
 const host = process.env.HOST || "0.0.0.0";
 const port = Number(process.env.PORT || 4173);
+const adminEntryKey = String(process.env.TRUTH_OR_WOLF_ADMIN_KEY || "").trim();
+const DEFAULT_ADMIN_CONFIG = Object.freeze({ forceHumanRole: "random", trackPosterior: false });
 const files = new Map([
   ["/", ["index.html", "text/html; charset=utf-8"]],
   ["/index.html", ["index.html", "text/html; charset=utf-8"]],
@@ -55,6 +63,24 @@ function cleanText(value, fallback = "") {
   return String(value ?? fallback).trim().slice(0, 24);
 }
 
+function isAdminEntry(value) {
+  if (!adminEntryKey || String(value ?? "").length < 32) return false;
+  const candidate = Buffer.from(String(value));
+  const secret = Buffer.from(adminEntryKey);
+  return candidate.length === secret.length && timingSafeEqual(candidate, secret);
+}
+
+function parseAdminRole(value, fallback = DEFAULT_ADMIN_CONFIG.forceHumanRole) {
+  return ["random", "wolf", "identity"].includes(value) ? value : fallback;
+}
+
+function adminConfigFromInput(input = {}, fallback = DEFAULT_ADMIN_CONFIG) {
+  return {
+    forceHumanRole: parseAdminRole(input.forceHumanRole, fallback.forceHumanRole),
+    trackPosterior: parseRuleBoolean(input.trackPosterior, fallback.trackPosterior),
+  };
+}
+
 function parsePlayerCount(value) {
   const count = Number(value);
   return Number.isInteger(count) && count >= MIN_PLAYER_COUNT && count <= MAX_PLAYER_COUNT ? count : null;
@@ -80,6 +106,7 @@ function roomRules(room) {
   return {
     includeIdentityFunction: room.includeIdentityFunction,
     requireAttackFunctionGuess: room.requireAttackFunctionGuess,
+    anonymousVoting: room.anonymousVoting,
   };
 }
 
@@ -127,8 +154,12 @@ function publicReports(room) {
 function publicVoteResult(room) {
   const result = room.game.lastVote;
   if (!result) return null;
+  // 1ゲーム中の公開範囲は、終了後に次回設定を変更しても変わらない。
+  const anonymous = room.gameAnonymousVoting ?? room.anonymousVoting;
   return {
-    votes: result.votes,
+    // 個別の投票先は、匿名ルールではサーバーからクライアントへ送らない。
+    votes: anonymous ? null : result.votes,
+    anonymous,
     tally: Object.fromEntries(result.tally),
     exiled: result.exiled ? {
       id: result.exiled.id,
@@ -172,11 +203,14 @@ function gameState(room, socketId) {
     activePlayerName: activePlayer?.name ?? null,
     pendingCount,
     submitted,
+    voteRound: room.voteRound ?? 1,
     myPlayerId: member?.playerId ?? null,
     isHost: member?.socketId === room.hostSocketId,
+    admin: member?.admin === true,
     playerCount: game.players.length,
     wolfCount: game.wolfCount,
-    rules: game.rules,
+    rules: { ...game.rules, anonymousVoting: room.gameAnonymousVoting ?? room.anonymousVoting },
+    posteriorHistory: member?.admin === true && game.trackPosterior ? game.posteriorHistory : null,
   };
 }
 
@@ -191,6 +225,8 @@ function roomState(room, socketId) {
     ...roomRules(room),
     status: room.game ? "playing" : "lobby",
     isHost: member?.socketId === room.hostSocketId,
+    isAdmin: member?.admin === true,
+    adminConfig: member?.admin === true ? room.adminConfig : null,
     players: room.members.map((entry) => ({
       name: entry.name,
       connected: Boolean(io.sockets.sockets.get(entry.socketId)),
@@ -219,7 +255,7 @@ function sendError(socket, message) {
 function privatePlayerData(room, playerId) {
   const player = getPlayer(room, playerId);
   if (!player) return null;
-  return {
+  const privateData = {
     playerId: player.id,
     name: player.name,
     role: player.role,
@@ -229,10 +265,14 @@ function privatePlayerData(room, playerId) {
     },
     condition: {
       label: player.condition.label,
+      input: player.condition.input,
       targetSign: player.condition.targetSign,
     },
     targetSignOptions: player.role === "wolf" ? [...TARGET_SIGN_KEYS] : [],
   };
+  // 人狼本人にだけ、所有者を対応付けられない関数の種類一覧を渡す。
+  if (player.role === "wolf") privateData.functionOptions = room.game.knownFunctionOptions();
+  return privateData;
 }
 
 function sendInvestigationTurns(room) {
@@ -251,6 +291,7 @@ function sendInvestigationTurns(room) {
 }
 
 function sendVoteTurns(room) {
+  const runoffCandidates = room.voteCandidates ? new Set(room.voteCandidates) : null;
   for (const player of room.game.getHumanActors().filter((candidate) => candidate.alive)) {
     if (!room.votePending.has(player.id)) continue;
     const member = room.members.find((entry) => entry.playerId === player.id);
@@ -258,8 +299,9 @@ function sendVoteTurns(room) {
     io.to(member.socketId).emit("game:private", {
       kind: "vote",
       ...privatePlayerData(room, player.id),
+      voteRound: room.voteRound ?? 1,
       targets: room.game.alivePlayers()
-        .filter((target) => target.id !== player.id)
+        .filter((target) => target.id !== player.id && (!runoffCandidates || runoffCandidates.has(target.id)))
         .map((target) => ({ id: target.id, name: target.name })),
     });
   }
@@ -294,11 +336,16 @@ function sendNightTurn(room) {
     playerId: player.id,
     name: player.name,
     role: player.role,
+    condition: {
+      label: player.condition.label,
+      input: player.condition.input,
+      targetSign: player.condition.targetSign,
+    },
     targets: room.game.alivePlayers()
       .filter((target) => target.role !== "wolf" && !target.infected)
       .map((target) => ({ id: target.id, name: target.name })),
     // 人狼には関数の種類だけを渡す。どのプレイヤーが持つかは渡さない。
-    functionOptions: room.game.rules.requireAttackFunctionGuess ? room.game.knownFunctionOptions() : [],
+    functionOptions: room.game.knownFunctionOptions(),
     requiresFunctionGuess: room.game.rules.requireAttackFunctionGuess,
   });
 }
@@ -328,6 +375,8 @@ function finishInvestigation(room) {
 
 function beginVote(room) {
   room.phase = "vote";
+  room.voteRound = 1;
+  room.voteCandidates = null;
   room.votePending = new Set(room.game.getHumanActors().filter((player) => player.alive).map((player) => player.id));
   room.voteSubmitted = new Set();
   room.humanVotes = new Map();
@@ -341,7 +390,23 @@ function beginVote(room) {
 }
 
 function finishVote(room) {
-  const result = room.game.resolveVotes(room.humanVotes);
+  const result = room.game.resolveVotes(room.humanVotes, {
+    candidateIds: room.voteCandidates,
+    runoff: Boolean(room.voteCandidates),
+  });
+  if (result.needsRunoff) {
+    room.phase = "vote";
+    room.voteRound = (room.voteRound ?? 1) + 1;
+    room.voteCandidates = new Set(result.runoffCandidates);
+    room.votePending = new Set(room.game.getHumanActors().filter((player) => player.alive).map((player) => player.id));
+    room.voteSubmitted = new Set();
+    room.humanVotes = new Map();
+    room.activePlayerId = null;
+    sendGameState(room);
+    sendVoteTurns(room);
+    return;
+  }
+  room.voteCandidates = null;
   room.activePlayerId = null;
   room.phase = room.game.outcome ? "ended" : "vote-result";
   sendGameState(room);
@@ -402,12 +467,17 @@ function removeMember(room, socketId) {
 }
 
 function startRoomGame(room) {
+  room.gameAnonymousVoting = room.anonymousVoting;
+  room.voteRound = 1;
+  room.voteCandidates = null;
   room.game = new FunctionWolfGame({
     humanCount: room.members.length,
     playerCount: room.playerCount,
     wolfCount: room.wolfCount,
     includeIdentityFunction: room.includeIdentityFunction,
     requireAttackFunctionGuess: room.requireAttackFunctionGuess,
+    forceHumanRole: room.adminConfig.forceHumanRole,
+    trackPosterior: room.adminConfig.trackPosterior,
   });
   room.members.forEach((member, index) => {
     const player = room.game.players[index];
@@ -419,9 +489,10 @@ function startRoomGame(room) {
 }
 
 io.on("connection", (socket) => {
-  socket.on("room:create", ({ name, password, playerCount, wolfCount, includeIdentityFunction, requireAttackFunctionGuess } = {}) => {
+  socket.on("room:create", ({ name, password, playerCount, wolfCount, includeIdentityFunction, requireAttackFunctionGuess, anonymousVoting } = {}) => {
     if (getRoom(socket)) return sendError(socket, "すでに部屋に参加しています。");
-    const playerName = cleanText(name, "プレイヤー");
+    const admin = isAdminEntry(name);
+    const playerName = admin ? "管理者" : cleanText(name, "プレイヤー");
     const totalPlayerCount = parsePlayerCount(playerCount) ?? DEFAULT_PLAYER_COUNT;
     const totalWolfCount = parseWolfCount(wolfCount, totalPlayerCount) ?? 1;
     const room = {
@@ -431,8 +502,10 @@ io.on("connection", (socket) => {
       wolfCount: totalWolfCount,
       includeIdentityFunction: parseRuleBoolean(includeIdentityFunction, DEFAULT_RULES.includeIdentityFunction),
       requireAttackFunctionGuess: parseRuleBoolean(requireAttackFunctionGuess, DEFAULT_RULES.requireAttackFunctionGuess),
+      anonymousVoting: parseRuleBoolean(anonymousVoting, DEFAULT_RULES.anonymousVoting),
+      adminConfig: { ...DEFAULT_ADMIN_CONFIG },
       hostSocketId: socket.id,
-      members: [{ socketId: socket.id, playerId: null, name: playerName }],
+      members: [{ socketId: socket.id, playerId: null, name: playerName, admin }],
       game: null,
       phase: "lobby",
       activePlayerId: null,
@@ -441,6 +514,8 @@ io.on("connection", (socket) => {
       investigationReports: new Map(),
       votePending: new Set(),
       voteSubmitted: new Set(),
+      voteRound: 1,
+      voteCandidates: null,
     };
     rooms.set(room.code, room);
     socket.join(room.code);
@@ -455,7 +530,7 @@ io.on("connection", (socket) => {
     if (room.password !== String(password ?? "").slice(0, 64)) return sendError(socket, "パスワードが違います。");
     if (room.game) return sendError(socket, "この部屋のゲームはすでに始まっています。");
     if (room.members.length >= room.playerCount) return sendError(socket, "この部屋は満員です。");
-    room.members.push({ socketId: socket.id, playerId: null, name: cleanText(name, "プレイヤー") });
+    room.members.push({ socketId: socket.id, playerId: null, name: cleanText(name, "プレイヤー"), admin: false });
     socket.join(room.code);
     socket.data.roomCode = room.code;
     sendRoomState(room);
@@ -469,7 +544,7 @@ io.on("connection", (socket) => {
     socket.data.roomCode = null;
   });
 
-  socket.on("room:set-player-count", ({ playerCount, wolfCount, includeIdentityFunction, requireAttackFunctionGuess } = {}) => {
+  socket.on("room:set-player-count", ({ playerCount, wolfCount, includeIdentityFunction, requireAttackFunctionGuess, anonymousVoting } = {}) => {
     const room = getRoom(socket);
     if (!room || room.hostSocketId !== socket.id) return sendError(socket, "部屋の作成者だけが人数を変更できます。");
     if (room.game && room.phase !== "ended") return sendError(socket, "ゲーム中は人数を変更できません。");
@@ -482,6 +557,19 @@ io.on("connection", (socket) => {
     room.wolfCount = totalWolfCount;
     room.includeIdentityFunction = parseRuleBoolean(includeIdentityFunction, room.includeIdentityFunction);
     room.requireAttackFunctionGuess = parseRuleBoolean(requireAttackFunctionGuess, room.requireAttackFunctionGuess);
+    room.anonymousVoting = parseRuleBoolean(anonymousVoting, room.anonymousVoting);
+    if (room.adminConfig.forceHumanRole === "identity") room.includeIdentityFunction = true;
+    sendRoomState(room);
+    if (room.game) sendGameState(room);
+  });
+
+  socket.on("room:set-admin-settings", ({ forceHumanRole, trackPosterior } = {}) => {
+    const room = getRoom(socket);
+    const member = getMember(room, socket.id);
+    if (!room || room.hostSocketId !== socket.id || !member?.admin) return sendError(socket, "管理者モードの設定を変更できません。");
+    if (room.game && room.phase !== "ended") return sendError(socket, "ゲーム中は管理者設定を変更できません。");
+    room.adminConfig = adminConfigFromInput({ forceHumanRole, trackPosterior }, room.adminConfig);
+    if (room.adminConfig.forceHumanRole === "identity") room.includeIdentityFunction = true;
     sendRoomState(room);
     if (room.game) sendGameState(room);
   });
@@ -493,8 +581,9 @@ io.on("connection", (socket) => {
     startRoomGame(room);
   });
 
-  socket.on("room:restart", ({ playerCount, wolfCount, includeIdentityFunction, requireAttackFunctionGuess } = {}) => {
+  socket.on("room:restart", ({ playerCount, wolfCount, includeIdentityFunction, requireAttackFunctionGuess, anonymousVoting, forceHumanRole, trackPosterior } = {}) => {
     const room = getRoom(socket);
+    const member = getMember(room, socket.id);
     if (!room || room.hostSocketId !== socket.id) return sendError(socket, "部屋の作成者だけが再戦を開始できます。");
     if (!room.game || room.phase !== "ended") return sendError(socket, "ゲーム終了後に再戦できます。");
     if (playerCount !== undefined) {
@@ -508,10 +597,13 @@ io.on("connection", (socket) => {
     room.wolfCount = totalWolfCount;
     room.includeIdentityFunction = parseRuleBoolean(includeIdentityFunction, room.includeIdentityFunction);
     room.requireAttackFunctionGuess = parseRuleBoolean(requireAttackFunctionGuess, room.requireAttackFunctionGuess);
+    room.anonymousVoting = parseRuleBoolean(anonymousVoting, room.anonymousVoting);
+    if (member?.admin) room.adminConfig = adminConfigFromInput({ forceHumanRole, trackPosterior }, room.adminConfig);
+    if (room.adminConfig.forceHumanRole === "identity") room.includeIdentityFunction = true;
     startRoomGame(room);
   });
 
-  socket.on("game:investigate", ({ targetId, targetSign } = {}) => {
+  socket.on("game:investigate", ({ targetId } = {}) => {
     const room = getRoom(socket);
     const member = getMember(room, socket.id);
     const playerId = member?.playerId;
@@ -520,10 +612,7 @@ io.on("connection", (socket) => {
       return sendError(socket, "観測済みか、現在は観測できない状態です。");
     }
     try {
-      const selectedTargetSign = player.role === "wolf" && TARGET_SIGN_KEYS.includes(targetSign)
-        ? targetSign
-        : undefined;
-      const report = room.game.investigate(playerId, targetId, selectedTargetSign);
+      const report = room.game.investigate(playerId, targetId);
       room.investigationReports.set(playerId, report);
       socket.emit("game:observation", {
         target: { id: report.target.id, name: report.target.name },
@@ -539,7 +628,7 @@ io.on("connection", (socket) => {
     }
   });
 
-  socket.on("game:publish", ({ mode } = {}) => {
+  socket.on("game:publish", ({ mode, targetSign } = {}) => {
     const room = getRoom(socket);
     const member = getMember(room, socket.id);
     const player = getPlayer(room, member?.playerId);
@@ -550,6 +639,10 @@ io.on("connection", (socket) => {
     if (mode === "no") {
       room.investigationReports.delete(player.id);
     } else {
+      if (player.role === "wolf") {
+        if (!TARGET_SIGN_KEYS.includes(targetSign)) return sendError(socket, "観測結果を確認してから、公開する目標符号を選択してください。");
+        chooseReportTargetSign(report, targetSign);
+      }
       if (mode === "lie" && player.role === "wolf") {
       report.isMatch = !report.isMatch;
       const expectedSymbol = report.condition.targetSign === "positive" ? "+" : report.condition.targetSign === "negative" ? "−" : "0";
@@ -579,7 +672,10 @@ io.on("connection", (socket) => {
     const playerId = member?.playerId;
     if (!room?.game || room.phase !== "vote" || !room.votePending.has(playerId)) return sendError(socket, "投票済みか、現在は投票できない状態です。");
     const alive = room.game.alivePlayers();
-    const valid = choice === "none" || alive.some((player) => player.id === choice && player.id !== playerId);
+    const runoffCandidates = room.voteCandidates ? new Set(room.voteCandidates) : null;
+    const valid = runoffCandidates
+      ? alive.some((player) => player.id === choice && player.id !== playerId && runoffCandidates.has(player.id))
+      : choice === "none" || alive.some((player) => player.id === choice && player.id !== playerId);
     if (!valid) return sendError(socket, "その投票先は選べません。");
     room.humanVotes.set(playerId, choice);
     room.votePending.delete(playerId);
