@@ -40,7 +40,7 @@ export function bindEvents({ state, socket, render }) {
     event.preventDefault(); state.error = null; socket.emit("room:join", formValues(event.currentTarget));
   });
   document.querySelector("#leave-room")?.addEventListener("click", () => {
-    socket.emit("room:leave"); state.room = null; state.game = null; state.privateAction = null; state.myFunction = null; state.observation = null; state.exileReveal = null; state.attackResult = null; state.nightTargetId = null; state.targetSignChoice = null; render();
+    socket.emit("room:leave"); state.room = null; state.game = null; state.privateAction = null; state.myFunction = null; state.myCondition = null; state.myRole = null; state.wolfFunctionOptions = null; state.showWolfFunctionList = false; state.observation = null; state.exileReveal = null; state.attackResult = null; state.nightTargetId = null; state.targetSignChoice = null; render();
   });
   document.querySelector("#start-online-game")?.addEventListener("click", () => socket.emit("room:start"));
   document.querySelector("#room-player-count-form")?.addEventListener("submit", (event) => {
@@ -50,6 +50,7 @@ export function bindEvents({ state, socket, render }) {
       wolfCount: event.currentTarget.elements.wolfCount.value,
       includeIdentityFunction: document.querySelector("#room-include-identity")?.checked ?? true,
       requireAttackFunctionGuess: document.querySelector("#room-require-attack-guess")?.checked ?? true,
+      anonymousVoting: document.querySelector("#room-anonymous-voting")?.checked ?? false,
     });
   });
   document.querySelector("#admin-settings-form")?.addEventListener("submit", (event) => {
@@ -65,6 +66,7 @@ export function bindEvents({ state, socket, render }) {
       wolfCount: document.querySelector("#restart-wolf-count")?.value,
       includeIdentityFunction: document.querySelector("#restart-include-identity")?.checked ?? true,
       requireAttackFunctionGuess: document.querySelector("#restart-require-attack-guess")?.checked ?? true,
+      anonymousVoting: document.querySelector("#restart-anonymous-voting")?.checked ?? false,
       forceHumanRole: document.querySelector("#restart-force-role")?.value,
       trackPosterior: document.querySelector("#restart-track-posterior")?.checked,
     });
@@ -72,14 +74,16 @@ export function bindEvents({ state, socket, render }) {
   document.querySelector("#begin-vote")?.addEventListener("click", () => socket.emit("game:begin-vote"));
   document.querySelector("#begin-night")?.addEventListener("click", () => socket.emit("game:begin-night"));
   document.querySelector("#next-round")?.addEventListener("click", () => socket.emit("game:next-round"));
-  document.querySelectorAll("[data-investigate]").forEach((button) => button.addEventListener("click", () => socket.emit("game:investigate", { targetId: button.dataset.investigate, targetSign: state.targetSignChoice })));
+  document.querySelectorAll("[data-investigate]").forEach((button) => button.addEventListener("click", () => socket.emit("game:investigate", { targetId: button.dataset.investigate })));
   document.querySelectorAll("[data-target-sign]").forEach((button) => button.addEventListener("click", () => {
     state.targetSignChoice = button.dataset.targetSign;
     render();
   }));
-  document.querySelectorAll("[data-publish]").forEach((button) => button.addEventListener("click", () => { socket.emit("game:publish", { mode: button.dataset.publish }); state.observation = null; }));
-  document.querySelector("#start-tutorial-citizen")?.addEventListener("click", () => { state.tutorialMode = true; state.tutorialRole = "citizen"; state.game = null; render(); });
-  document.querySelector("#start-tutorial-wolf")?.addEventListener("click", () => { state.tutorialMode = true; state.tutorialRole = "wolf"; state.game = null; render(); });
+  document.querySelectorAll("[data-publish]").forEach((button) => button.addEventListener("click", () => { socket.emit("game:publish", { mode: button.dataset.publish, targetSign: state.targetSignChoice }); state.observation = null; }));
+  document.querySelector("#start-tutorial-citizen")?.addEventListener("click", () => { state.tutorialMode = true; state.tutorialRole = "citizen"; state.game = null; state.myFunction = null; state.myCondition = null; state.myRole = null; state.wolfFunctionOptions = null; state.showWolfFunctionList = false; render(); });
+  document.querySelector("#start-tutorial-wolf")?.addEventListener("click", () => { state.tutorialMode = true; state.tutorialRole = "wolf"; state.game = null; state.myFunction = null; state.myCondition = null; state.myRole = null; state.wolfFunctionOptions = null; state.showWolfFunctionList = false; render(); });
+  document.querySelector("#show-wolf-function-list")?.addEventListener("click", () => { state.showWolfFunctionList = true; render(); });
+  document.querySelector("#close-wolf-function-list")?.addEventListener("click", () => { state.showWolfFunctionList = false; render(); });
   document.querySelectorAll("[data-vote]").forEach((button) => button.addEventListener("click", () => socket.emit("game:vote", { choice: button.dataset.vote })));
   document.querySelectorAll("[data-copy-value]").forEach((button) => button.addEventListener("click", async () => {
     const originalLabel = button.textContent;
@@ -103,15 +107,21 @@ export function bindEvents({ state, socket, render }) {
     socket.emit("game:attack", { targetId: button.dataset.attackDirect });
     state.nightTargetId = null;
   }));
-  document.querySelector("#cancel-attack-target")?.addEventListener("click", () => { state.nightTargetId = null; render(); });
+  document.querySelectorAll("[data-attack-back]").forEach((button) => button.addEventListener("click", () => {
+    state.nightTargetId = null;
+    render();
+  }));
 }
 
 export function bindSocketEvents({ state, socket, render }) {
   socket.on("connect", () => { state.connected = true; state.error = null; render(); });
   socket.on("disconnect", () => { state.connected = false; state.error = "サーバーとの接続が切れました。再読み込みしてください。"; render(); });
-  socket.on("room:update", (room) => { state.room = room; if (room.status === "lobby") { state.game = null; state.myFunction = null; } state.error = null; render(); });
+  socket.on("room:update", (room) => { state.room = room; if (room.status === "lobby") { state.game = null; state.myFunction = null; state.myCondition = null; state.myRole = null; state.wolfFunctionOptions = null; state.showWolfFunctionList = false; } state.error = null; render(); });
   socket.on("game:state", (game) => {
-    const keepPrivateAction = state.game?.phase === game.phase && state.privateAction?.playerId === game.myPlayerId && !game.submitted;
+    const keepPrivateAction = state.game?.phase === game.phase
+      && (state.game?.voteRound ?? 1) === (game.voteRound ?? 1)
+      && state.privateAction?.playerId === game.myPlayerId
+      && !game.submitted;
     state.game = game;
     if (!keepPrivateAction) { state.privateAction = null; state.observation = null; state.exileReveal = null; state.attackResult = null; state.nightTargetId = null; state.targetSignChoice = null; }
     state.error = null; render();
@@ -120,13 +130,15 @@ export function bindSocketEvents({ state, socket, render }) {
     state.privateAction = action;
     // 自分の関数は届いたタイミングでキャッシュし、投票などその後のフェーズでも左パネルに表示し続ける
     if (action.function) state.myFunction = action.function;
+    if (action.condition) state.myCondition = action.condition;
+    if (action.role) state.myRole = action.role;
+    if (action.role === "wolf" && Array.isArray(action.functionOptions)) state.wolfFunctionOptions = action.functionOptions;
+    if (action.role !== "wolf") { state.wolfFunctionOptions = null; state.showWolfFunctionList = false; }
     state.observation = null; state.exileReveal = null; state.attackResult = null; state.nightTargetId = null;
-    state.targetSignChoice = action.kind === "investigation" && action.role === "wolf" && action.condition
-      ? action.condition.targetSign
-      : null;
+    state.targetSignChoice = null;
     render();
   });
-  socket.on("game:observation", (observation) => { state.observation = observation; render(); });
+  socket.on("game:observation", (observation) => { state.observation = observation; state.targetSignChoice = null; render(); });
   socket.on("game:exile-reveal", (reveal) => { state.exileReveal = reveal; render(); });
   socket.on("game:attack-result", (result) => { state.attackResult = result; render(); });
   socket.on("room:error", ({ message }) => { state.error = message; render(); });

@@ -57,6 +57,7 @@
 .function-player-name { font-size: 11px; font-weight: 700; }
 .human-badge { color: var(--gold); border: 1px solid #5b4c30; padding: 2px 5px; font-size: 7px; letter-spacing: .08em; }
 .function-expression { margin-top: 7px; color: #e7dccb; font: 12px/1.45 Georgia, "Yu Mincho", serif; }
+.function-condition { margin-top: 6px; color: var(--gold); font-size: 8px; line-height: 1.5; }
 .function-family { color: var(--dim); font-size: 8px; margin-top: 4px; }
 .function-vector { margin-top: 5px; color: var(--muted); font: 9px Georgia, serif; letter-spacing: .03em; }
 
@@ -64,6 +65,12 @@
 .omega-symbol { position: absolute; right: -4px; bottom: -28px; font: 90px Georgia, serif; color: rgba(199,78,66,.1); }
 .omega-expression { margin-top: 9px; color: var(--red-hot); font: 16px/1.5 Georgia, "Yu Mincho", serif; }
 .omega-note { margin-top: 10px; color: var(--muted); font-size: 9px; line-height: 1.7; }
+.wolf-function-list-button { width: 100%; margin-top: 14px; }
+.wolf-function-list { display: grid; gap: 7px; margin: 20px 0; text-align: left; }
+.wolf-function-item { display: grid; grid-template-columns: 28px 1fr; gap: 10px; align-items: center; padding: 11px 12px; border: 1px solid var(--line-soft); background: #141210; }
+.wolf-function-item span { color: var(--red-hot); font: 10px Georgia, serif; }
+.wolf-function-item b { color: var(--gold); font: 15px Georgia, "Yu Mincho", serif; }
+.wolf-function-modal { max-width: 560px; }
 
 .function-main { min-height: calc(100vh - 120px); display: flex; flex-direction: column; }
 .function-main-body { padding: clamp(20px, 4vw, 38px); flex: 1; }
@@ -112,6 +119,11 @@
 .tally-row { display: grid; grid-template-columns: 1fr 2fr 35px; gap: 10px; align-items: center; margin: 9px 0; font-size: 10px; }
 .tally-bar { height: 7px; background: #2b2521; }
 .tally-fill { height: 100%; background: var(--red); }
+.vote-details { margin: 18px auto 0; max-width: 520px; padding: 13px; border: 1px solid var(--line-soft); background: #141210; }
+.vote-detail-row { display: grid; grid-template-columns: 1fr 20px 1fr; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--line-soft); font-size: 9px; }
+.vote-detail-row:last-child { border-bottom: 0; }
+.vote-detail-row b { color: var(--gold); }
+.vote-anonymity-note { margin: 18px auto 0; padding: 12px; max-width: 520px; color: var(--muted); border: 1px solid var(--line-soft); font-size: 9px; text-align: center; }
 .outcome-reveal { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 7px; margin: 20px 0; }
 .outcome-person { padding: 10px; border: 1px solid var(--line-soft); font-size: 9px; }
 .outcome-person b { display: block; color: var(--ink); margin-bottom: 4px; }

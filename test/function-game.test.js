@@ -117,8 +117,10 @@ test("a wolf can choose the target sign for a private observation", () => {
   const game = new FunctionWolfGame({ humanCount: 7, rng: seeded(141) });
   const wolf = game.wolf;
   const target = game.players.find((player) => player.id !== wolf.id);
-  const chosenSign = wolf.condition.targetSign === "positive" ? "negative" : "positive";
-  const report = game.investigate(wolf.id, target.id, chosenSign);
+  const report = game.investigate(wolf.id, target.id);
+  const observedSign = report.observed.key;
+  const chosenSign = observedSign === "positive" ? "negative" : "positive";
+  game.chooseReportTargetSign(report, chosenSign);
   assert.equal(report.condition.targetSign, chosenSign);
   assert.equal(report.targetSign, chosenSign);
   assert.equal(report.isMatch, report.observed.key === chosenSign);
@@ -231,6 +233,28 @@ test("a unanimous no-exile vote removes nobody", () => {
   const result = game.resolveVotes(votes);
   assert.equal(result.exiled, null);
   assert.equal(game.alivePlayers().length, 7);
+});
+
+test("a tied vote starts a runoff limited to the tied players", () => {
+  const game = new FunctionWolfGame({ humanCount: 7, rng: seeded(3) });
+  const [p0, p1, p2, p3, p4, p5, p6] = game.players;
+  const firstVotes = new Map([
+    [p0.id, "none"], [p1.id, p2.id], [p2.id, p1.id],
+    [p3.id, p1.id], [p4.id, p1.id], [p5.id, p2.id], [p6.id, p2.id],
+  ]);
+  const first = game.resolveVotes(firstVotes);
+  assert.equal(first.needsRunoff, true);
+  assert.deepEqual(new Set(first.runoffCandidates), new Set([p1.id, p2.id]));
+  assert.equal(first.exiled, null);
+  assert.equal(game.alivePlayers().length, 7);
+
+  const runoffVotes = new Map([
+    [p0.id, p1.id], [p1.id, p2.id], [p2.id, p1.id],
+    [p3.id, p1.id], [p4.id, p2.id], [p5.id, p2.id], [p6.id, p1.id],
+  ]);
+  const final = game.resolveVotes(runoffVotes, { candidateIds: first.runoffCandidates, runoff: true });
+  assert.equal(final.runoff, true);
+  assert.equal(final.exiled.id, p1.id);
 });
 
 test("the latest vote result remains available after advancing a round", () => {

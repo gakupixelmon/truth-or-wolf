@@ -1,6 +1,6 @@
 import { DEFAULT_PLAYER_COUNT, DEFAULT_RULES, INPUT_COUNT, FUNCTION_NAMES, MAX_PLAYER_COUNT, MAX_WOLF_COUNT, MIN_PLAYER_COUNT, PHASES } from "./rules/constants.js";
 import { buildBalancedFunctions } from "./rules/functions.js";
-import { investigate, publishReport, runCpuInvestigations, updateSuspicion } from "./rules/investigation.js";
+import { chooseReportTargetSign, investigate, publishReport, runCpuInvestigations, updateSuspicion } from "./rules/investigation.js";
 import { resolveVotes } from "./rules/voting.js";
 import { knownFunctionOptions, resolveNight } from "./rules/infection.js";
 import { checkOutcome } from "./rules/victory.js";
@@ -122,7 +122,8 @@ export class FunctionWolfGame {
       .map((target) => target.id);
   }
 
-  investigate(observerId, targetId, targetSignOverride) { return investigate(this, observerId, targetId, targetSignOverride); }
+  investigate(observerId, targetId) { return investigate(this, observerId, targetId); }
+  chooseReportTargetSign(report, targetSign) { return chooseReportTargetSign(report, targetSign); }
   updateSuspicion(observerId, targetId, positive, trust = 1) { return updateSuspicion(this, observerId, targetId, positive, trust); }
   publishReport(report, published = true) { return publishReport(this, report, published); }
   runCpuInvestigations() { return runCpuInvestigations(this); }
@@ -134,7 +135,7 @@ export class FunctionWolfGame {
     return observers.reduce((sum, observer) => sum + this.suspicions.get(observer.id).get(targetId), 0) / observers.length;
   }
 
-  resolveVotes(humanVotes = new Map()) { return resolveVotes(this, humanVotes); }
+  resolveVotes(humanVotes = new Map(), options = {}) { return resolveVotes(this, humanVotes, options); }
   resolveNight(targetId = null, functionId = undefined) { return resolveNight(this, targetId, functionId); }
   knownFunctionOptions() { return knownFunctionOptions(this); }
   checkOutcome(exiled = null) { return checkOutcome(this, exiled); }
