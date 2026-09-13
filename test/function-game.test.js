@@ -178,6 +178,21 @@ test("a citizen can publish the opposite sign", () => {
   assert.equal(game.publicReports.at(-1).reportedSign, report.reportedSign);
 });
 
+test("investigation target limits use human first-come order", () => {
+  const game = new FunctionWolfGame({ humanCount: 7, limitInvestigatorsPerTarget: true, maxInvestigatorsPerTarget: 1, rng: seeded(144) });
+  const observers = game.players.filter((player) => player.role === "citizen");
+  const target = game.players.find((player) => player.id !== observers[0].id && player.id !== observers[1].id);
+  game.investigate(observers[0].id, target.id);
+  assert.throws(() => game.investigate(observers[1].id, target.id), /full/);
+  assert.equal(game.investigationClaims.get(target.id).length, 1);
+});
+
+test("CPU investigation claims never exceed the configured target limit", () => {
+  const game = new FunctionWolfGame({ humanCount: 0, limitInvestigatorsPerTarget: true, maxInvestigatorsPerTarget: 1, rng: seeded(145) });
+  game.runCpuInvestigations();
+  for (const claimants of game.investigationClaims.values()) assert.ok(claimants.length <= 1);
+});
+
 test("the original wolf owns exactly the publicly announced wolf function", () => {
   const game = new FunctionWolfGame({ rng: seeded(6) });
   assert.equal(game.wolf.baseFunction.id, game.omega.id);
@@ -339,6 +354,17 @@ test("CPU observations update private suspicion without exposing infection", () 
   assert.equal(target.role, "citizen");
   assert.ok(after >= 0.005 && after <= 0.995);
   assert.notEqual(after, before);
+});
+
+test("CPU citizens always report their observed sign", () => {
+  for (let seed = 1; seed <= 100; seed += 1) {
+    const game = new FunctionWolfGame({ humanCount: 1, rng: seeded(seed) });
+    const reports = game.runCpuInvestigations();
+    for (const report of reports.filter((entry) => entry.observer.role === "citizen")) {
+      assert.equal(report.reportedSign, report.observed.symbol);
+      assert.equal(report.truthful, true);
+    }
+  }
 });
 
 test("seeded mixed human/CPU games can progress to a valid outcome", () => {

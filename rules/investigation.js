@@ -1,4 +1,5 @@
 import { maxWithRandomTie } from "./probability.js";
+import { shuffle } from "./functions.js";
 
 export const TARGET_SIGN_KEYS = Object.freeze(["positive", "negative", "zero"]);
 
@@ -20,6 +21,18 @@ function chooseNonMatchingSign(game, targetSign) {
   return choices[Math.floor(game.rng() * choices.length)] ?? "negative";
 }
 
+function claimTarget(game, observer, target) {
+  if (!game.rules.limitInvestigatorsPerTarget) return;
+  if (!game.investigationClaims) game.investigationClaims = new Map();
+  const claimants = game.investigationClaims.get(target.id) ?? [];
+  if (claimants.includes(observer.id)) return;
+  if (claimants.length >= game.rules.maxInvestigatorsPerTarget) {
+    throw new Error("Investigation target is full");
+  }
+  claimants.push(observer.id);
+  game.investigationClaims.set(target.id, claimants);
+}
+
 export function updateSuspicion(game, observerId, targetId, positive, trust = 1) {
   const map = game.suspicions.get(observerId);
   if (!map || targetId === observerId) return;
@@ -37,6 +50,7 @@ export function investigate(game, observerId, targetId) {
   const observer = game.players.find((player) => player.id === observerId && player.alive);
   const target = game.players.find((player) => player.id === targetId && player.alive);
   if (!observer || !target || observer.id === target.id) throw new Error("Invalid investigation target");
+  claimTarget(game, observer, target);
   const innerValue = game.currentValue(target, observer.condition.input);
   const value = game.currentValue(observer, innerValue);
   let observed = observer.condition.observe(value);
@@ -112,7 +126,10 @@ export function publishReport(game, report, published = true) {
 
 export function runCpuInvestigations(game) {
   const reports = [];
-  for (const observer of game.players.filter((player) => !player.human && player.alive)) {
+  const cpuObservers = game.rules.limitInvestigatorsPerTarget
+    ? shuffle(game.players.filter((player) => !player.human && player.alive), game.rng)
+    : game.players.filter((player) => !player.human && player.alive);
+  for (const observer of cpuObservers) {
     const targets = game.alivePlayers().filter((target) => target.id !== observer.id);
     const target = observer.role === "wolf" || observer.role === "madman"
       ? targets[Math.floor(game.rng() * targets.length)]
@@ -120,7 +137,13 @@ export function runCpuInvestigations(game) {
         const probability = game.suspicions.get(observer.id).get(candidate.id);
         return 1 - Math.abs(0.5 - probability) + game.rng() * 0.08;
       }, game.rng);
-    const report = investigate(game, observer.id, target.id);
+    let report;
+    try {
+      report = investigate(game, observer.id, target.id);
+    } catch {
+      // 人間の先着枠、または先に処理されたCPUが枠を使った場合は観測しない。
+      continue;
+    }
     if (observer.role === "wolf" || observer.role === "madman") {
       chooseReportTargetSign(report, TARGET_SIGN_KEYS[Math.floor(game.rng() * TARGET_SIGN_KEYS.length)]);
     }
@@ -135,8 +158,6 @@ export function runCpuInvestigations(game) {
       const unexpectedSymbol = report.condition.targetSign === "positive" ? "−" : "+";
       report.reportedSign = report.isMatch ? expectedSymbol : unexpectedSymbol;
       report.truthful = false;
-    } else if (observer.role === "citizen" && game.rng() < (observer.infected ? 0.65 : 0.04)) {
-      reverseReport(report);
     }
     if (observer.role === "wolf" || observer.role === "madman") {
       const publicTargets = game.alivePlayers().filter((candidate) => candidate.id !== observer.id);

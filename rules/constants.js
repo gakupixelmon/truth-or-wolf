@@ -13,6 +13,8 @@ export const DEFAULT_RULES = Object.freeze({
   infectedWolfObservationAlwaysNonWolf: false,
   madmanCount: 0,
   madmanRandomObservation: true,
+  limitInvestigatorsPerTarget: false,
+  maxInvestigatorsPerTarget: DEFAULT_PLAYER_COUNT,
 });
 // 既存コードとの互換性を保つための既定値エイリアス。
 export const PLAYER_COUNT = DEFAULT_PLAYER_COUNT;

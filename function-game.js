@@ -9,7 +9,7 @@ export { DEFAULT_RULES, INPUT_COUNT, FUNCTION_NAMES } from "./rules/constants.js
 
 /** ゲーム状態の保持を担当するファサード。ルール本体は rules/ 以下に分離。 */
 export class FunctionWolfGame {
-  constructor({ humanCount = 1, playerCount = DEFAULT_PLAYER_COUNT, wolfCount = 1, madmanCount = DEFAULT_RULES.madmanCount, rng = Math.random, includeIdentityFunction = DEFAULT_RULES.includeIdentityFunction, requireAttackFunctionGuess = DEFAULT_RULES.requireAttackFunctionGuess, revealConditionOnAttackFailure = DEFAULT_RULES.revealConditionOnAttackFailure, infectedWolfObservationAlwaysNonWolf = DEFAULT_RULES.infectedWolfObservationAlwaysNonWolf, forceHumanRole = "random", trackPosterior = false } = {}) {
+  constructor({ humanCount = 1, playerCount = DEFAULT_PLAYER_COUNT, wolfCount = 1, madmanCount = DEFAULT_RULES.madmanCount, rng = Math.random, includeIdentityFunction = DEFAULT_RULES.includeIdentityFunction, requireAttackFunctionGuess = DEFAULT_RULES.requireAttackFunctionGuess, revealConditionOnAttackFailure = DEFAULT_RULES.revealConditionOnAttackFailure, infectedWolfObservationAlwaysNonWolf = DEFAULT_RULES.infectedWolfObservationAlwaysNonWolf, limitInvestigatorsPerTarget = DEFAULT_RULES.limitInvestigatorsPerTarget, maxInvestigatorsPerTarget = playerCount, forceHumanRole = "random", trackPosterior = false } = {}) {
     if (!Number.isInteger(playerCount) || playerCount < MIN_PLAYER_COUNT || playerCount > MAX_PLAYER_COUNT) {
       throw new Error(`playerCount must be between ${MIN_PLAYER_COUNT} and ${MAX_PLAYER_COUNT}`);
     }
@@ -23,6 +23,9 @@ export class FunctionWolfGame {
     const maxMadmen = Math.min(MAX_MADMAN_COUNT, playerCount - wolfCount - 1);
     if (!Number.isInteger(madmanCount) || madmanCount < 0 || madmanCount > maxMadmen) {
       throw new Error(`madmanCount must be between 0 and ${maxMadmen}`);
+    }
+    if (!Number.isInteger(maxInvestigatorsPerTarget) || maxInvestigatorsPerTarget < 1 || maxInvestigatorsPerTarget > playerCount) {
+      throw new Error(`maxInvestigatorsPerTarget must be between 1 and ${playerCount}`);
     }
     if (!["random", "wolf", "identity"].includes(forceHumanRole) || (forceHumanRole !== "random" && humanCount < 1)) {
       throw new Error("forceHumanRole requires a human player and must be random, wolf, or identity");
@@ -41,6 +44,8 @@ export class FunctionWolfGame {
       infectedWolfObservationAlwaysNonWolf: infectedWolfObservationAlwaysNonWolf === true,
       madmanCount,
       madmanRandomObservation: true,
+      limitInvestigatorsPerTarget: limitInvestigatorsPerTarget === true,
+      maxInvestigatorsPerTarget,
     });
     this.phase = PHASES.INVESTIGATION;
     const wolfIndices = new Set();
@@ -76,6 +81,7 @@ export class FunctionWolfGame {
     this.reliability = new Map();
     this.publicReports = [];
     this.investigationHistory = new Map(this.players.map((player) => [player.id, []]));
+    this.investigationClaims = new Map();
     this.attackHistory = [];
     this.madmanTruthReports = [];
     this.lastVote = null;
@@ -167,6 +173,7 @@ export class FunctionWolfGame {
   startNextRound() {
     this.round += 1;
     this.phase = PHASES.INVESTIGATION;
+    this.investigationClaims = new Map();
     this.lastAttack = null;
   }
 }

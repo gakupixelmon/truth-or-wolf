@@ -41,12 +41,25 @@ function bindMadmanLimit(playerInput, wolfInput, madmanInput) {
   sync();
 }
 
+function bindInvestigationLimit(playerInput, maxInput) {
+  if (!playerInput || !maxInput) return;
+  const sync = () => {
+    const max = Math.max(1, Number(playerInput.value));
+    maxInput.max = String(max);
+    if (Number(maxInput.value) > max) maxInput.value = String(max);
+  };
+  playerInput.addEventListener("input", sync);
+  sync();
+}
+
 export function bindEvents({ state, socket, render }) {
   bindWolfLimit(document.querySelector("#player-count"), document.querySelector("#wolf-count"));
   bindWolfLimit(document.querySelector("#room-player-count"), document.querySelector("#room-wolf-count"));
   bindWolfLimit(document.querySelector("#restart-player-count"), document.querySelector("#restart-wolf-count"));
   bindMadmanLimit(document.querySelector("#room-player-count"), document.querySelector("#room-wolf-count"), document.querySelector("#room-madman-count"));
   bindMadmanLimit(document.querySelector("#restart-player-count"), document.querySelector("#restart-wolf-count"), document.querySelector("#restart-madman-count"));
+  bindInvestigationLimit(document.querySelector("#room-player-count"), document.querySelector("#room-max-investigators"));
+  bindInvestigationLimit(document.querySelector("#restart-player-count"), document.querySelector("#restart-max-investigators"));
   document.querySelector("#create-room-form")?.addEventListener("submit", (event) => {
     event.preventDefault(); state.error = null; socket.emit("room:create", formValues(event.currentTarget));
   });
@@ -68,6 +81,8 @@ export function bindEvents({ state, socket, render }) {
       anonymousVoting: document.querySelector("#room-anonymous-voting")?.checked ?? false,
       revealConditionOnAttackFailure: document.querySelector("#room-reveal-failed-attack-condition")?.checked ?? false,
       infectedWolfObservationAlwaysNonWolf: document.querySelector("#room-infected-wolf-observation")?.checked ?? false,
+      limitInvestigatorsPerTarget: document.querySelector("#room-limit-investigators")?.checked ?? false,
+      maxInvestigatorsPerTarget: document.querySelector("#room-max-investigators")?.value,
     });
   });
   document.querySelector("#admin-settings-form")?.addEventListener("submit", (event) => {
@@ -87,6 +102,8 @@ export function bindEvents({ state, socket, render }) {
       anonymousVoting: document.querySelector("#restart-anonymous-voting")?.checked ?? false,
       revealConditionOnAttackFailure: document.querySelector("#restart-reveal-failed-attack-condition")?.checked ?? false,
       infectedWolfObservationAlwaysNonWolf: document.querySelector("#restart-infected-wolf-observation")?.checked ?? false,
+      limitInvestigatorsPerTarget: document.querySelector("#restart-limit-investigators")?.checked ?? false,
+      maxInvestigatorsPerTarget: document.querySelector("#restart-max-investigators")?.value,
       forceHumanRole: document.querySelector("#restart-force-role")?.value,
       trackPosterior: document.querySelector("#restart-track-posterior")?.checked,
     });
