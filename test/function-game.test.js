@@ -58,6 +58,15 @@ test("admin presets can force the human wolf or the citizen identity function", 
   assert.equal(identityGame.rules.includeIdentityFunction, true);
 });
 
+test("solo games can force the human to be a citizen or madman", () => {
+  const citizenGame = new FunctionWolfGame({ humanCount: 1, madmanCount: 1, forceHumanRole: "citizen", rng: seeded(605) });
+  assert.equal(citizenGame.players[0].role, "citizen");
+
+  const madmanGame = new FunctionWolfGame({ humanCount: 1, madmanCount: 1, forceHumanRole: "madman", rng: seeded(606) });
+  assert.equal(madmanGame.players[0].role, "madman");
+  assert.equal(madmanGame.madmen.length, 1);
+});
+
 test("admin posterior tracking records snapshots without changing normal games", () => {
   const normal = new FunctionWolfGame({ humanCount: 1, rng: seeded(603) });
   assert.equal(normal.posteriorHistory.length, 0);
@@ -191,6 +200,21 @@ test("CPU investigation claims never exceed the configured target limit", () => 
   const game = new FunctionWolfGame({ humanCount: 0, limitInvestigatorsPerTarget: true, maxInvestigatorsPerTarget: 1, rng: seeded(145) });
   game.runCpuInvestigations();
   for (const claimants of game.investigationClaims.values()) assert.ok(claimants.length <= 1);
+});
+
+test("CPU actual targets remain within the limit after a human wolf investigates", () => {
+  for (let seed = 1; seed <= 100; seed += 1) {
+    const game = new FunctionWolfGame({ humanCount: 1, forceHumanRole: "wolf", limitInvestigatorsPerTarget: true, maxInvestigatorsPerTarget: 3, rng: seeded(seed) });
+    const humanTarget = game.players.find((player) => player.id !== "p0");
+    game.investigate("p0", humanTarget.id);
+    game.runCpuInvestigations();
+    for (const claimants of game.investigationClaims.values()) assert.ok(claimants.length <= 3);
+    for (const reports of game.investigationHistory.values()) {
+      const counts = new Map();
+      for (const report of reports) counts.set(report.target.id, (counts.get(report.target.id) ?? 0) + 1);
+      for (const count of counts.values()) assert.ok(count <= 3);
+    }
+  }
 });
 
 test("the original wolf owns exactly the publicly announced wolf function", () => {

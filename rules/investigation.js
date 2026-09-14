@@ -124,59 +124,111 @@ export function publishReport(game, report, published = true) {
   return publicReport;
 }
 
+function chooseCpuTarget(game, observer, targets) {
+  return observer.role === "wolf" || observer.role === "madman"
+    ? targets[Math.floor(game.rng() * targets.length)]
+    : maxWithRandomTie(targets, (candidate) => {
+      const probability = game.suspicions.get(observer.id).get(candidate.id);
+      return 1 - Math.abs(0.5 - probability) + game.rng() * 0.08;
+    }, game.rng);
+}
+
+function availableCpuTargets(game, observer) {
+  return game.alivePlayers().filter((target) => {
+    if (target.id === observer.id) return false;
+    if (!game.rules.limitInvestigatorsPerTarget) return true;
+    const claimants = game.investigationClaims?.get(target.id) ?? [];
+    return claimants.length < game.rules.maxInvestigatorsPerTarget;
+  });
+}
+
+function processCpuInvestigation(game, observer, target, reports) {
+  let report;
+  try {
+    report = investigate(game, observer.id, target.id);
+  } catch {
+    // 人間の先着枠などで空き枠がなくなった場合は観測しない。
+    return;
+  }
+  if (observer.role === "wolf" || observer.role === "madman") {
+    chooseReportTargetSign(report, TARGET_SIGN_KEYS[Math.floor(game.rng() * TARGET_SIGN_KEYS.length)]);
+  }
+  if (observer.role === "madman") {
+    const reportedKey = TARGET_SIGN_KEYS[Math.floor(game.rng() * TARGET_SIGN_KEYS.length)];
+    report.reportedSign = reportedKey === "positive" ? "+" : reportedKey === "negative" ? "−" : "0";
+    report.isMatch = reportedKey === report.condition.targetSign;
+    report.truthful = report.reportedSign === report.observed.symbol;
+  } else if (observer.role === "wolf" && game.rng() < 0.72) {
+    report.isMatch = !report.isMatch;
+    const expectedSymbol = report.condition.targetSign === "positive" ? "+" : report.condition.targetSign === "negative" ? "−" : "0";
+    const unexpectedSymbol = report.condition.targetSign === "positive" ? "−" : "+";
+    report.reportedSign = report.isMatch ? expectedSymbol : unexpectedSymbol;
+    report.truthful = false;
+  }
+  if (observer.role === "wolf" || observer.role === "madman") {
+    const publicTargets = game.alivePlayers().filter((candidate) => candidate.id !== observer.id);
+    if (publicTargets.length && game.rng() < 0.35) {
+      chooseReportPublicationTarget(report, publicTargets[Math.floor(game.rng() * publicTargets.length)]);
+    }
+  }
+  // 狂人の真の観測は、市民への公開を選ばなかった場合でも人狼へ伝える。
+  // 戻り値には公開・非公開を問わず CPU の観測を含め、サーバー側で
+  // 狂人の真情報だけを人狼へ送れるようにする。
+  reports.push(report);
+  if (game.rng() < 0.82) publishReport(game, report, true);
+}
+
 export function runCpuInvestigations(game) {
   const reports = [];
-  const cpuObservers = game.rules.limitInvestigatorsPerTarget
+  const limitEnabled = game.rules.limitInvestigatorsPerTarget;
+  const cpuObservers = limitEnabled
     ? shuffle(game.players.filter((player) => !player.human && player.alive), game.rng)
     : game.players.filter((player) => !player.human && player.alive);
-  for (const observer of cpuObservers) {
-    const targets = game.alivePlayers().filter((target) => {
-      if (target.id === observer.id) return false;
-      if (!game.rules.limitInvestigatorsPerTarget) return true;
-      const claimants = game.investigationClaims?.get(target.id) ?? [];
-      return claimants.length < game.rules.maxInvestigatorsPerTarget;
-    });
-    // 上限枠がすべて埋まっている場合、このCPUは観測せず次へ進む。
-    if (!targets.length) continue;
-    const target = observer.role === "wolf" || observer.role === "madman"
-      ? targets[Math.floor(game.rng() * targets.length)]
-      : maxWithRandomTie(targets, (candidate) => {
-        const probability = game.suspicions.get(observer.id).get(candidate.id);
-        return 1 - Math.abs(0.5 - probability) + game.rng() * 0.08;
-      }, game.rng);
-    let report;
-    try {
-      report = investigate(game, observer.id, target.id);
-    } catch {
-      // 人間の先着枠、または先に処理されたCPUが枠を使った場合は観測しない。
-      continue;
+
+  if (!limitEnabled) {
+    for (const observer of cpuObservers) {
+      const targets = availableCpuTargets(game, observer);
+      if (!targets.length) continue;
+      processCpuInvestigation(game, observer, chooseCpuTarget(game, observer, targets), reports);
     }
-    if (observer.role === "wolf" || observer.role === "madman") {
-      chooseReportTargetSign(report, TARGET_SIGN_KEYS[Math.floor(game.rng() * TARGET_SIGN_KEYS.length)]);
-    }
-    if (observer.role === "madman") {
-      const reportedKey = TARGET_SIGN_KEYS[Math.floor(game.rng() * TARGET_SIGN_KEYS.length)];
-      report.reportedSign = reportedKey === "positive" ? "+" : reportedKey === "negative" ? "−" : "0";
-      report.isMatch = reportedKey === report.condition.targetSign;
-      report.truthful = report.reportedSign === report.observed.symbol;
-    } else if (observer.role === "wolf" && game.rng() < 0.72) {
-      report.isMatch = !report.isMatch;
-      const expectedSymbol = report.condition.targetSign === "positive" ? "+" : report.condition.targetSign === "negative" ? "−" : "0";
-      const unexpectedSymbol = report.condition.targetSign === "positive" ? "−" : "+";
-      report.reportedSign = report.isMatch ? expectedSymbol : unexpectedSymbol;
-      report.truthful = false;
-    }
-    if (observer.role === "wolf" || observer.role === "madman") {
-      const publicTargets = game.alivePlayers().filter((candidate) => candidate.id !== observer.id);
-      if (publicTargets.length && game.rng() < 0.35) {
-        chooseReportPublicationTarget(report, publicTargets[Math.floor(game.rng() * publicTargets.length)]);
+  } else {
+    // CPUは候補を一度に決めるが、衝突で落選したCPUは次の抽選へ回す。
+    // 人間の主張は investigationClaims にすでに入っているため、常に先に枠を確保する。
+    let pendingObservers = [...cpuObservers];
+    const observerOrder = new Map(cpuObservers.map((observer, index) => [observer.id, index]));
+    while (pendingObservers.length) {
+      const plans = [];
+      const plansByTarget = new Map();
+      for (const observer of pendingObservers) {
+        const targets = availableCpuTargets(game, observer);
+        if (!targets.length) continue;
+        const target = chooseCpuTarget(game, observer, targets);
+        const plan = { observer, target };
+        plans.push(plan);
+        const contenders = plansByTarget.get(target.id) ?? [];
+        contenders.push(plan);
+        plansByTarget.set(target.id, contenders);
       }
+      if (!plans.length) break;
+
+      const accepted = [];
+      const acceptedObserverIds = new Set();
+      for (const [targetId, contenders] of plansByTarget) {
+        const occupied = game.investigationClaims?.get(targetId)?.length ?? 0;
+        const slots = Math.max(0, game.rules.maxInvestigatorsPerTarget - occupied);
+        for (const winner of shuffle(contenders, game.rng).slice(0, slots)) {
+          accepted.push(winner);
+          acceptedObserverIds.add(winner.observer.id);
+        }
+      }
+      if (!accepted.length) break;
+      accepted.sort((left, right) => observerOrder.get(left.observer.id) - observerOrder.get(right.observer.id));
+      for (const { observer, target } of accepted) processCpuInvestigation(game, observer, target, reports);
+      // 抽選に負けたCPUだけが、満員対象を候補から外して再選択する。
+      pendingObservers = plans
+        .filter(({ observer }) => !acceptedObserverIds.has(observer.id))
+        .map(({ observer }) => observer);
     }
-    // 狂人の真の観測は、市民への公開を選ばなかった場合でも人狼へ伝える。
-    // 戻り値には公開・非公開を問わず CPU の観測を含め、サーバー側で
-    // 狂人の真情報だけを人狼へ送れるようにする。
-    reports.push(report);
-    if (game.rng() < 0.82) publishReport(game, report, true);
   }
   game.recordPosteriorSnapshot?.(`round-${game.round}-investigation`);
   return reports;
