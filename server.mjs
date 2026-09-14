@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
-import { randomInt, timingSafeEqual } from "node:crypto";
+import { randomInt, randomUUID, timingSafeEqual } from "node:crypto";
 import { Server } from "socket.io";
 import { FunctionWolfGame } from "./function-game.js";
 import { DEFAULT_PLAYER_COUNT, DEFAULT_RULES, MAX_MADMAN_COUNT, MAX_PLAYER_COUNT, MAX_WOLF_COUNT, MIN_PLAYER_COUNT } from "./rules/constants.js";
@@ -15,6 +15,7 @@ try {
 const host = process.env.HOST || "0.0.0.0";
 const port = Number(process.env.PORT || 4173);
 const adminEntryKey = String(process.env.TRUTH_OR_WOLF_ADMIN_KEY || "").trim();
+const DISCONNECT_GRACE_MS = 30_000;
 const DEFAULT_ADMIN_CONFIG = Object.freeze({ forceHumanRole: "random", trackPosterior: false });
 const files = new Map([
   ["/", ["index.html", "text/html; charset=utf-8"]],
@@ -263,6 +264,10 @@ function sendRoomState(room) {
   }
 }
 
+function sendRoomSession(socket, room, member) {
+  socket.emit("room:session", { code: room.code, token: member.resumeToken });
+}
+
 function sendGameState(room) {
   if (!room.game) return;
   for (const member of room.members) {
@@ -504,7 +509,19 @@ function clearRoomIfEmpty(room) {
   if (room.members.length === 0) rooms.delete(room.code);
 }
 
+function scheduleMemberRemoval(room, socketId) {
+  const member = getMember(room, socketId);
+  if (!member) return;
+  clearTimeout(member.disconnectTimer);
+  member.disconnectTimer = setTimeout(() => {
+    if (member.socketId === socketId && !io.sockets.sockets.get(socketId)) removeMember(room, socketId);
+  }, DISCONNECT_GRACE_MS);
+  sendRoomState(room);
+}
+
 function removeMember(room, socketId) {
+  const removedMember = room.members.find((member) => member.socketId === socketId);
+  clearTimeout(removedMember?.disconnectTimer);
   room.members = room.members.filter((member) => member.socketId !== socketId);
   if (room.hostSocketId === socketId) room.hostSocketId = room.members[0]?.socketId ?? null;
   if (room.game && room.members.length) {
@@ -571,7 +588,7 @@ io.on("connection", (socket) => {
       limitInvestigatorsPerTarget: parseRuleBoolean(limitInvestigatorsPerTarget, DEFAULT_RULES.limitInvestigatorsPerTarget),
       adminConfig: { ...DEFAULT_ADMIN_CONFIG },
       hostSocketId: socket.id,
-      members: [{ socketId: socket.id, playerId: null, name: playerName, admin }],
+      members: [{ socketId: socket.id, playerId: null, name: playerName, admin, resumeToken: randomUUID(), disconnectTimer: null }],
       game: null,
       phase: "lobby",
       activePlayerId: null,
@@ -586,7 +603,36 @@ io.on("connection", (socket) => {
     rooms.set(room.code, room);
     socket.join(room.code);
     socket.data.roomCode = room.code;
+    sendRoomSession(socket, room, room.members[0]);
     sendRoomState(room);
+  });
+
+  socket.on("room:resume", ({ code, token } = {}) => {
+    if (getRoom(socket)) return;
+    const room = rooms.get(String(code ?? "").trim());
+    const member = room?.members.find((entry) => entry.resumeToken === String(token ?? ""));
+    if (!room || !member) return socket.emit("room:resume-failed", { message: "部屋への再接続情報が見つかりません。" });
+    // リロード直後は旧Socketがまだ切断処理中のことがあるため、
+    // 同じ再接続トークンを持つ新しいSocketへ接続を引き継ぐ。
+    if (member.socketId && member.socketId !== socket.id) {
+      const previousSocket = io.sockets.sockets.get(member.socketId);
+      if (previousSocket) previousSocket.disconnect(true);
+    }
+    const wasHost = room.hostSocketId === member.socketId;
+    clearTimeout(member.disconnectTimer);
+    member.disconnectTimer = null;
+    member.socketId = socket.id;
+    if (wasHost) room.hostSocketId = socket.id;
+    socket.join(room.code);
+    socket.data.roomCode = room.code;
+    sendRoomSession(socket, room, member);
+    sendRoomState(room);
+    if (room.game) {
+      sendGameState(room);
+      if (room.phase === "investigation") sendInvestigationTurns(room);
+      if (room.phase === "vote") sendVoteTurns(room);
+      if (room.phase === "night" && room.activePlayerId === member.playerId) sendNightTurn(room);
+    }
   });
 
   socket.on("room:join", ({ code, name, password } = {}) => {
@@ -596,9 +642,10 @@ io.on("connection", (socket) => {
     if (room.password !== String(password ?? "").slice(0, 64)) return sendError(socket, "パスワードが違います。");
     if (room.game) return sendError(socket, "この部屋のゲームはすでに始まっています。");
     if (room.members.length >= room.playerCount) return sendError(socket, "この部屋は満員です。");
-    room.members.push({ socketId: socket.id, playerId: null, name: cleanText(name, "プレイヤー"), admin: false });
+    room.members.push({ socketId: socket.id, playerId: null, name: cleanText(name, "プレイヤー"), admin: false, resumeToken: randomUUID(), disconnectTimer: null });
     socket.join(room.code);
     socket.data.roomCode = room.code;
+    sendRoomSession(socket, room, room.members.at(-1));
     sendRoomState(room);
   });
 
@@ -711,6 +758,22 @@ io.on("connection", (socket) => {
         truthful: true,
       });
     } catch (error) {
+      if (error?.message === "Investigation target is full" && room.game.rules.limitInvestigatorsPerTarget) {
+        const hasAlternative = room.game.alivePlayers().some((target) => {
+          if (target.id === playerId) return false;
+          const claimants = room.game.investigationClaims?.get(target.id) ?? [];
+          return claimants.length < room.game.rules.maxInvestigatorsPerTarget;
+        });
+        // 人間の選択で最後に自分以外の全対象が埋まった場合でも、
+        // 観測なしとしてこのプレイヤーを完了扱いにして進行を止めない。
+        if (!hasAlternative) {
+          room.investigationPending.delete(playerId);
+          room.investigationSubmitted.add(playerId);
+          if (room.investigationPending.size === 0) finishInvestigation(room);
+          else sendGameState(room);
+          return sendError(socket, "このラウンドは観測できる対象が残っていないため、観測なしで進みます。");
+        }
+      }
       sendError(socket, error?.message === "Investigation target is full"
         ? `その対象は上限（${room.game.rules.maxInvestigatorsPerTarget}人）まで占われています。別の対象を選んでください。`
         : "その対象は観測できません。");
@@ -835,7 +898,7 @@ io.on("connection", (socket) => {
   socket.on("disconnect", () => {
     const room = getRoom(socket);
     if (!room) return;
-    removeMember(room, socket.id);
+    scheduleMemberRemoval(room, socket.id);
   });
 });
 
