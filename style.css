@@ -215,7 +215,7 @@ select { width: 100%; border: 1px solid var(--line); color: var(--ink); backgrou
 .vote-row b { color: var(--red-hot); }
 
 .modal-backdrop { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 18px; background: rgba(7,6,5,.88); backdrop-filter: blur(7px); }
-.modal { width: min(610px, 100%); border: 1px solid var(--line); background: #1d1916; padding: clamp(26px, 5vw, 50px); text-align: center; box-shadow: 0 30px 100px #000; position: relative; }
+.modal { width: min(610px, 100%); max-height: calc(100vh - 36px); overflow-y: auto; border: 1px solid var(--line); background: #1d1916; padding: clamp(26px, 5vw, 50px); text-align: center; box-shadow: 0 30px 100px #000; position: relative; }
 .modal::before { content: ""; position: absolute; top: 0; left: 18%; right: 18%; height: 2px; background: var(--red); box-shadow: 0 0 18px var(--red); }
 .modal-icon { width: 64px; height: 64px; margin: 0 auto 20px; display: grid; place-items: center; border-radius: 50%; border: 1px solid var(--red-deep); color: var(--red-hot); font: 30px Georgia, serif; }
 .modal h2 { margin: 0 0 12px; font: 700 29px "Hiragino Mincho ProN", "Yu Mincho", serif; }
