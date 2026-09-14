@@ -2,6 +2,33 @@ function formValues(form) {
   return Object.fromEntries(new FormData(form).entries());
 }
 
+const ROOM_SESSION_KEY = "truth-or-wolf:room-session";
+
+function loadRoomSession() {
+  try {
+    const session = JSON.parse(sessionStorage.getItem(ROOM_SESSION_KEY) ?? "null");
+    return session?.code && session?.token ? { code: String(session.code), token: String(session.token) } : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveRoomSession(session) {
+  try {
+    sessionStorage.setItem(ROOM_SESSION_KEY, JSON.stringify({ code: session.code, token: session.token }));
+  } catch {
+    // localStorageが使えない環境でもゲーム自体は継続する。
+  }
+}
+
+function clearRoomSession() {
+  try {
+    sessionStorage.removeItem(ROOM_SESSION_KEY);
+  } catch {
+    // localStorageが使えない環境でも退出処理は継続する。
+  }
+}
+
 async function copyToClipboard(value) {
   if (navigator.clipboard?.writeText) {
     await navigator.clipboard.writeText(value);
@@ -67,7 +94,7 @@ export function bindEvents({ state, socket, render }) {
     event.preventDefault(); state.error = null; socket.emit("room:join", formValues(event.currentTarget));
   });
   document.querySelector("#leave-room")?.addEventListener("click", () => {
-    socket.emit("room:leave"); state.room = null; state.game = null; state.privateAction = null; state.myFunction = null; state.myCondition = null; state.myRole = null; state.wolfFunctionOptions = null; state.showWolfFunctionList = false; state.madmanTruths = []; state.observation = null; state.exileReveal = null; state.attackResult = null; state.nightTargetId = null; state.targetSignChoice = null; state.reportedSignChoice = null; state.publishTargetId = null; render();
+    clearRoomSession(); socket.emit("room:leave"); state.room = null; state.game = null; state.privateAction = null; state.myFunction = null; state.myCondition = null; state.myRole = null; state.wolfFunctionOptions = null; state.showWolfFunctionList = false; state.madmanTruths = []; state.observation = null; state.exileReveal = null; state.attackResult = null; state.nightTargetId = null; state.targetSignChoice = null; state.reportedSignChoice = null; state.publishTargetId = null; render();
   });
   document.querySelector("#start-online-game")?.addEventListener("click", () => socket.emit("room:start"));
   document.querySelector("#room-player-count-form")?.addEventListener("submit", (event) => {
@@ -159,8 +186,16 @@ export function bindEvents({ state, socket, render }) {
 }
 
 export function bindSocketEvents({ state, socket, render }) {
-  socket.on("connect", () => { state.connected = true; state.error = null; render(); });
+  socket.on("connect", () => {
+    state.connected = true;
+    state.error = null;
+    const session = loadRoomSession();
+    if (session) socket.emit("room:resume", session);
+    render();
+  });
   socket.on("disconnect", () => { state.connected = false; state.error = "サーバーとの接続が切れました。再読み込みしてください。"; render(); });
+  socket.on("room:session", (session) => saveRoomSession(session));
+  socket.on("room:resume-failed", ({ message }) => { clearRoomSession(); state.error = message ?? "部屋へ再接続できませんでした。"; render(); });
   socket.on("room:update", (room) => { state.room = room; if (room.status === "lobby") { state.game = null; state.myFunction = null; state.myCondition = null; state.myRole = null; state.wolfFunctionOptions = null; state.showWolfFunctionList = false; state.madmanTruths = []; state.reportedSignChoice = null; state.publishTargetId = null; } state.error = null; render(); });
   socket.on("game:state", (game) => {
     const restarting = state.game?.phase === "ended" && game.phase === "investigation";

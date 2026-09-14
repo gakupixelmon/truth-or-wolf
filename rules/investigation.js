@@ -130,7 +130,14 @@ export function runCpuInvestigations(game) {
     ? shuffle(game.players.filter((player) => !player.human && player.alive), game.rng)
     : game.players.filter((player) => !player.human && player.alive);
   for (const observer of cpuObservers) {
-    const targets = game.alivePlayers().filter((target) => target.id !== observer.id);
+    const targets = game.alivePlayers().filter((target) => {
+      if (target.id === observer.id) return false;
+      if (!game.rules.limitInvestigatorsPerTarget) return true;
+      const claimants = game.investigationClaims?.get(target.id) ?? [];
+      return claimants.length < game.rules.maxInvestigatorsPerTarget;
+    });
+    // 上限枠がすべて埋まっている場合、このCPUは観測せず次へ進む。
+    if (!targets.length) continue;
     const target = observer.role === "wolf" || observer.role === "madman"
       ? targets[Math.floor(game.rng() * targets.length)]
       : maxWithRandomTie(targets, (candidate) => {
