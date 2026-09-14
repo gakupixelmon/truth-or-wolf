@@ -17,6 +17,7 @@ const port = Number(process.env.PORT || 4173);
 const adminEntryKey = String(process.env.TRUTH_OR_WOLF_ADMIN_KEY || "").trim();
 const DISCONNECT_GRACE_MS = 30_000;
 const DEFAULT_ADMIN_CONFIG = Object.freeze({ forceHumanRole: "random", trackPosterior: false });
+const SOLO_HUMAN_ROLES = ["random", "citizen", "wolf", "madman"];
 const files = new Map([
   ["/", ["index.html", "text/html; charset=utf-8"]],
   ["/index.html", ["index.html", "text/html; charset=utf-8"]],
@@ -75,6 +76,12 @@ function parseAdminRole(value, fallback = DEFAULT_ADMIN_CONFIG.forceHumanRole) {
   return ["random", "wolf", "identity"].includes(value) ? value : fallback;
 }
 
+function parseSoloHumanRole(value, fallback = "random", madmanCount = 0) {
+  const safeFallback = SOLO_HUMAN_ROLES.includes(fallback) ? fallback : "random";
+  const role = SOLO_HUMAN_ROLES.includes(value) ? value : safeFallback;
+  return role === "madman" && madmanCount < 1 ? "random" : role;
+}
+
 function adminConfigFromInput(input = {}, fallback = DEFAULT_ADMIN_CONFIG) {
   return {
     forceHumanRole: parseAdminRole(input.forceHumanRole, fallback.forceHumanRole),
@@ -127,6 +134,7 @@ function roomRules(room) {
     infectedWolfObservationAlwaysNonWolf: room.infectedWolfObservationAlwaysNonWolf,
     limitInvestigatorsPerTarget: room.limitInvestigatorsPerTarget,
     maxInvestigatorsPerTarget: room.maxInvestigatorsPerTarget,
+    soloHumanRole: room.soloHumanRole,
   };
 }
 
@@ -541,6 +549,11 @@ function startRoomGame(room) {
   room.gameAnonymousVoting = room.anonymousVoting;
   room.voteRound = 1;
   room.voteCandidates = null;
+  const forceHumanRole = room.adminConfig.forceHumanRole !== "random"
+    ? room.adminConfig.forceHumanRole
+    : room.members.length === 1
+      ? parseSoloHumanRole(room.soloHumanRole, "random", room.madmanCount)
+      : "random";
   room.game = new FunctionWolfGame({
     humanCount: room.members.length,
     playerCount: room.playerCount,
@@ -552,7 +565,7 @@ function startRoomGame(room) {
     infectedWolfObservationAlwaysNonWolf: room.infectedWolfObservationAlwaysNonWolf,
     limitInvestigatorsPerTarget: room.limitInvestigatorsPerTarget,
     maxInvestigatorsPerTarget: room.maxInvestigatorsPerTarget,
-    forceHumanRole: room.adminConfig.forceHumanRole,
+    forceHumanRole,
     trackPosterior: room.adminConfig.trackPosterior,
   });
   room.members.forEach((member, index) => {
@@ -579,6 +592,7 @@ io.on("connection", (socket) => {
       playerCount: totalPlayerCount,
       wolfCount: totalWolfCount,
       madmanCount: totalMadmanCount,
+      soloHumanRole: "random",
       maxInvestigatorsPerTarget: totalMaxInvestigators,
       includeIdentityFunction: parseRuleBoolean(includeIdentityFunction, DEFAULT_RULES.includeIdentityFunction),
       requireAttackFunctionGuess: parseRuleBoolean(requireAttackFunctionGuess, DEFAULT_RULES.requireAttackFunctionGuess),
@@ -657,7 +671,7 @@ io.on("connection", (socket) => {
     socket.data.roomCode = null;
   });
 
-  socket.on("room:set-player-count", ({ playerCount, wolfCount, madmanCount, includeIdentityFunction, requireAttackFunctionGuess, anonymousVoting, revealConditionOnAttackFailure, infectedWolfObservationAlwaysNonWolf, limitInvestigatorsPerTarget, maxInvestigatorsPerTarget } = {}, acknowledge) => {
+  socket.on("room:set-player-count", ({ playerCount, wolfCount, madmanCount, includeIdentityFunction, requireAttackFunctionGuess, anonymousVoting, revealConditionOnAttackFailure, infectedWolfObservationAlwaysNonWolf, limitInvestigatorsPerTarget, maxInvestigatorsPerTarget, soloHumanRole } = {}, acknowledge) => {
     const room = getRoom(socket);
     if (!room || room.hostSocketId !== socket.id) return sendError(socket, "部屋の作成者だけが人数を変更できます。");
     if (room.game && room.phase !== "ended") return sendError(socket, "ゲーム中は人数を変更できません。");
@@ -675,6 +689,7 @@ io.on("connection", (socket) => {
     room.playerCount = totalPlayerCount;
     room.wolfCount = totalWolfCount;
     room.madmanCount = totalMadmanCount;
+    room.soloHumanRole = parseSoloHumanRole(soloHumanRole, room.soloHumanRole, totalMadmanCount);
     room.maxInvestigatorsPerTarget = totalMaxInvestigators;
     room.includeIdentityFunction = parseRuleBoolean(includeIdentityFunction, room.includeIdentityFunction);
     room.requireAttackFunctionGuess = parseRuleBoolean(requireAttackFunctionGuess, room.requireAttackFunctionGuess);
@@ -706,7 +721,7 @@ io.on("connection", (socket) => {
     startRoomGame(room);
   });
 
-  socket.on("room:restart", ({ playerCount, wolfCount, madmanCount, includeIdentityFunction, requireAttackFunctionGuess, anonymousVoting, revealConditionOnAttackFailure, infectedWolfObservationAlwaysNonWolf, limitInvestigatorsPerTarget, maxInvestigatorsPerTarget, forceHumanRole, trackPosterior } = {}) => {
+  socket.on("room:restart", ({ playerCount, wolfCount, madmanCount, includeIdentityFunction, requireAttackFunctionGuess, anonymousVoting, revealConditionOnAttackFailure, infectedWolfObservationAlwaysNonWolf, limitInvestigatorsPerTarget, maxInvestigatorsPerTarget, soloHumanRole, forceHumanRole, trackPosterior } = {}) => {
     const room = getRoom(socket);
     const member = getMember(room, socket.id);
     if (!room || room.hostSocketId !== socket.id) return sendError(socket, "部屋の作成者だけが再戦を開始できます。");
@@ -725,6 +740,7 @@ io.on("connection", (socket) => {
     if (totalMaxInvestigators === null) return sendError(socket, `同じ対象を占える人数は1〜${room.playerCount}人にしてください。`);
     room.wolfCount = totalWolfCount;
     room.madmanCount = totalMadmanCount;
+    room.soloHumanRole = parseSoloHumanRole(soloHumanRole, room.soloHumanRole, totalMadmanCount);
     room.maxInvestigatorsPerTarget = totalMaxInvestigators;
     room.includeIdentityFunction = parseRuleBoolean(includeIdentityFunction, room.includeIdentityFunction);
     room.requireAttackFunctionGuess = parseRuleBoolean(requireAttackFunctionGuess, room.requireAttackFunctionGuess);

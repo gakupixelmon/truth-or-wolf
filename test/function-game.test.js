@@ -58,6 +58,15 @@ test("admin presets can force the human wolf or the citizen identity function", 
   assert.equal(identityGame.rules.includeIdentityFunction, true);
 });
 
+test("solo games can force the human to be a citizen or madman", () => {
+  const citizenGame = new FunctionWolfGame({ humanCount: 1, madmanCount: 1, forceHumanRole: "citizen", rng: seeded(605) });
+  assert.equal(citizenGame.players[0].role, "citizen");
+
+  const madmanGame = new FunctionWolfGame({ humanCount: 1, madmanCount: 1, forceHumanRole: "madman", rng: seeded(606) });
+  assert.equal(madmanGame.players[0].role, "madman");
+  assert.equal(madmanGame.madmen.length, 1);
+});
+
 test("admin posterior tracking records snapshots without changing normal games", () => {
   const normal = new FunctionWolfGame({ humanCount: 1, rng: seeded(603) });
   assert.equal(normal.posteriorHistory.length, 0);

@@ -27,8 +27,11 @@ export class FunctionWolfGame {
     if (!Number.isInteger(maxInvestigatorsPerTarget) || maxInvestigatorsPerTarget < 1 || maxInvestigatorsPerTarget > playerCount) {
       throw new Error(`maxInvestigatorsPerTarget must be between 1 and ${playerCount}`);
     }
-    if (!["random", "wolf", "identity"].includes(forceHumanRole) || (forceHumanRole !== "random" && humanCount < 1)) {
-      throw new Error("forceHumanRole requires a human player and must be random, wolf, or identity");
+    if (!["random", "citizen", "wolf", "madman", "identity"].includes(forceHumanRole) || (forceHumanRole !== "random" && humanCount < 1)) {
+      throw new Error("forceHumanRole requires a human player and must be random, citizen, madman, wolf, or identity");
+    }
+    if (forceHumanRole === "madman" && madmanCount < 1) {
+      throw new Error("forceHumanRole madman requires at least one madman");
     }
     this.rng = rng;
     this.round = 1;
@@ -52,14 +55,15 @@ export class FunctionWolfGame {
     if (forceHumanRole === "wolf") wolfIndices.add(0);
     while (wolfIndices.size < wolfCount) {
       const candidate = Math.floor(rng() * playerCount);
-      if (forceHumanRole === "identity" && candidate === 0) continue;
+      if (["citizen", "madman", "identity"].includes(forceHumanRole) && candidate === 0) continue;
       wolfIndices.add(candidate);
     }
     const madmanIndices = new Set();
+    if (forceHumanRole === "madman") madmanIndices.add(0);
     while (madmanIndices.size < madmanCount) {
       const candidate = Math.floor(rng() * playerCount);
       if (wolfIndices.has(candidate)) continue;
-      if (forceHumanRole === "identity" && candidate === 0) continue;
+      if (["citizen", "identity"].includes(forceHumanRole) && candidate === 0) continue;
       madmanIndices.add(candidate);
     }
     const setup = buildBalancedFunctions([...wolfIndices], rng, playerCount, {

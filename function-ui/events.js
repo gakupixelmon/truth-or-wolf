@@ -79,6 +79,19 @@ function bindInvestigationLimit(playerInput, maxInput) {
   sync();
 }
 
+function bindSoloRoleAvailability(madmanInput, roleSelect) {
+  if (!madmanInput || !roleSelect) return;
+  const madmanOption = roleSelect.querySelector('option[value="madman"]');
+  if (!madmanOption) return;
+  const sync = () => {
+    const available = Number(madmanInput.value) > 0;
+    madmanOption.disabled = !available;
+    if (!available && roleSelect.value === "madman") roleSelect.value = "random";
+  };
+  madmanInput.addEventListener("input", sync);
+  sync();
+}
+
 function roomSettingsValues(form) {
   return {
     playerCount: form?.elements.playerCount?.value,
@@ -91,6 +104,7 @@ function roomSettingsValues(form) {
     infectedWolfObservationAlwaysNonWolf: document.querySelector("#room-infected-wolf-observation")?.checked ?? false,
     limitInvestigatorsPerTarget: document.querySelector("#room-limit-investigators")?.checked ?? false,
     maxInvestigatorsPerTarget: document.querySelector("#room-max-investigators")?.value,
+    soloHumanRole: document.querySelector("#room-solo-role")?.value ?? "random",
   };
 }
 
@@ -102,6 +116,8 @@ export function bindEvents({ state, socket, render }) {
   bindMadmanLimit(document.querySelector("#restart-player-count"), document.querySelector("#restart-wolf-count"), document.querySelector("#restart-madman-count"));
   bindInvestigationLimit(document.querySelector("#room-player-count"), document.querySelector("#room-max-investigators"));
   bindInvestigationLimit(document.querySelector("#restart-player-count"), document.querySelector("#restart-max-investigators"));
+  bindSoloRoleAvailability(document.querySelector("#room-madman-count"), document.querySelector("#room-solo-role"));
+  bindSoloRoleAvailability(document.querySelector("#restart-madman-count"), document.querySelector("#restart-solo-role"));
   document.querySelector("#create-room-form")?.addEventListener("submit", (event) => {
     event.preventDefault(); state.error = null; socket.emit("room:create", formValues(event.currentTarget));
   });
@@ -141,6 +157,7 @@ export function bindEvents({ state, socket, render }) {
       infectedWolfObservationAlwaysNonWolf: document.querySelector("#restart-infected-wolf-observation")?.checked ?? false,
       limitInvestigatorsPerTarget: document.querySelector("#restart-limit-investigators")?.checked ?? false,
       maxInvestigatorsPerTarget: document.querySelector("#restart-max-investigators")?.value,
+      soloHumanRole: document.querySelector("#restart-solo-role")?.value ?? "random",
       forceHumanRole: document.querySelector("#restart-force-role")?.value,
       trackPosterior: document.querySelector("#restart-track-posterior")?.checked,
     });
