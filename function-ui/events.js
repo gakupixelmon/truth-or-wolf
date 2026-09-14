@@ -79,6 +79,21 @@ function bindInvestigationLimit(playerInput, maxInput) {
   sync();
 }
 
+function roomSettingsValues(form) {
+  return {
+    playerCount: form?.elements.playerCount?.value,
+    wolfCount: form?.elements.wolfCount?.value,
+    madmanCount: form?.elements.madmanCount?.value,
+    includeIdentityFunction: document.querySelector("#room-include-identity")?.checked ?? true,
+    requireAttackFunctionGuess: document.querySelector("#room-require-attack-guess")?.checked ?? true,
+    anonymousVoting: document.querySelector("#room-anonymous-voting")?.checked ?? false,
+    revealConditionOnAttackFailure: document.querySelector("#room-reveal-failed-attack-condition")?.checked ?? false,
+    infectedWolfObservationAlwaysNonWolf: document.querySelector("#room-infected-wolf-observation")?.checked ?? false,
+    limitInvestigatorsPerTarget: document.querySelector("#room-limit-investigators")?.checked ?? false,
+    maxInvestigatorsPerTarget: document.querySelector("#room-max-investigators")?.value,
+  };
+}
+
 export function bindEvents({ state, socket, render }) {
   bindWolfLimit(document.querySelector("#player-count"), document.querySelector("#wolf-count"));
   bindWolfLimit(document.querySelector("#room-player-count"), document.querySelector("#room-wolf-count"));
@@ -96,21 +111,16 @@ export function bindEvents({ state, socket, render }) {
   document.querySelector("#leave-room")?.addEventListener("click", () => {
     clearRoomSession(); socket.emit("room:leave"); state.room = null; state.game = null; state.privateAction = null; state.myFunction = null; state.myCondition = null; state.myRole = null; state.wolfFunctionOptions = null; state.showWolfFunctionList = false; state.madmanTruths = []; state.observation = null; state.exileReveal = null; state.attackResult = null; state.nightTargetId = null; state.targetSignChoice = null; state.reportedSignChoice = null; state.publishTargetId = null; render();
   });
-  document.querySelector("#start-online-game")?.addEventListener("click", () => socket.emit("room:start"));
+  document.querySelector("#start-online-game")?.addEventListener("click", () => {
+    const settingsForm = document.querySelector("#room-player-count-form");
+    if (!settingsForm) return socket.emit("room:start");
+    socket.emit("room:set-player-count", roomSettingsValues(settingsForm), (result) => {
+      if (result?.ok) socket.emit("room:start");
+    });
+  });
   document.querySelector("#room-player-count-form")?.addEventListener("submit", (event) => {
     event.preventDefault();
-    socket.emit("room:set-player-count", {
-      playerCount: event.currentTarget.elements.playerCount.value,
-      wolfCount: event.currentTarget.elements.wolfCount.value,
-      madmanCount: event.currentTarget.elements.madmanCount.value,
-      includeIdentityFunction: document.querySelector("#room-include-identity")?.checked ?? true,
-      requireAttackFunctionGuess: document.querySelector("#room-require-attack-guess")?.checked ?? true,
-      anonymousVoting: document.querySelector("#room-anonymous-voting")?.checked ?? false,
-      revealConditionOnAttackFailure: document.querySelector("#room-reveal-failed-attack-condition")?.checked ?? false,
-      infectedWolfObservationAlwaysNonWolf: document.querySelector("#room-infected-wolf-observation")?.checked ?? false,
-      limitInvestigatorsPerTarget: document.querySelector("#room-limit-investigators")?.checked ?? false,
-      maxInvestigatorsPerTarget: document.querySelector("#room-max-investigators")?.value,
-    });
+    socket.emit("room:set-player-count", roomSettingsValues(event.currentTarget));
   });
   document.querySelector("#admin-settings-form")?.addEventListener("submit", (event) => {
     event.preventDefault();

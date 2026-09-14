@@ -193,6 +193,21 @@ test("CPU investigation claims never exceed the configured target limit", () => 
   for (const claimants of game.investigationClaims.values()) assert.ok(claimants.length <= 1);
 });
 
+test("CPU actual targets remain within the limit after a human wolf investigates", () => {
+  for (let seed = 1; seed <= 100; seed += 1) {
+    const game = new FunctionWolfGame({ humanCount: 1, forceHumanRole: "wolf", limitInvestigatorsPerTarget: true, maxInvestigatorsPerTarget: 3, rng: seeded(seed) });
+    const humanTarget = game.players.find((player) => player.id !== "p0");
+    game.investigate("p0", humanTarget.id);
+    game.runCpuInvestigations();
+    for (const claimants of game.investigationClaims.values()) assert.ok(claimants.length <= 3);
+    for (const reports of game.investigationHistory.values()) {
+      const counts = new Map();
+      for (const report of reports) counts.set(report.target.id, (counts.get(report.target.id) ?? 0) + 1);
+      for (const count of counts.values()) assert.ok(count <= 3);
+    }
+  }
+});
+
 test("the original wolf owns exactly the publicly announced wolf function", () => {
   const game = new FunctionWolfGame({ rng: seeded(6) });
   assert.equal(game.wolf.baseFunction.id, game.omega.id);

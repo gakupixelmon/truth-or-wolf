@@ -657,7 +657,7 @@ io.on("connection", (socket) => {
     socket.data.roomCode = null;
   });
 
-  socket.on("room:set-player-count", ({ playerCount, wolfCount, madmanCount, includeIdentityFunction, requireAttackFunctionGuess, anonymousVoting, revealConditionOnAttackFailure, infectedWolfObservationAlwaysNonWolf, limitInvestigatorsPerTarget, maxInvestigatorsPerTarget } = {}) => {
+  socket.on("room:set-player-count", ({ playerCount, wolfCount, madmanCount, includeIdentityFunction, requireAttackFunctionGuess, anonymousVoting, revealConditionOnAttackFailure, infectedWolfObservationAlwaysNonWolf, limitInvestigatorsPerTarget, maxInvestigatorsPerTarget } = {}, acknowledge) => {
     const room = getRoom(socket);
     if (!room || room.hostSocketId !== socket.id) return sendError(socket, "部屋の作成者だけが人数を変更できます。");
     if (room.game && room.phase !== "ended") return sendError(socket, "ゲーム中は人数を変更できません。");
@@ -685,6 +685,7 @@ io.on("connection", (socket) => {
     if (room.adminConfig.forceHumanRole === "identity") room.includeIdentityFunction = true;
     sendRoomState(room);
     if (room.game) sendGameState(room);
+    acknowledge?.({ ok: true });
   });
 
   socket.on("room:set-admin-settings", ({ forceHumanRole, trackPosterior } = {}) => {
