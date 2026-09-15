@@ -7,10 +7,43 @@ const WOLF_FUNCTION_OPTIONS = [
   { id: "fn-x+2", label: "f(x) = x + 2" },
 ];
 
+const TUTORIAL_RULES = Object.freeze({
+  includeIdentityFunction: true,
+  requireAttackFunctionGuess: true,
+  anonymousVoting: false,
+  revealConditionOnAttackFailure: false,
+  infectedWolfObservationAlwaysNonWolf: false,
+  limitInvestigatorsPerTarget: false,
+  maxInvestigatorsPerTarget: 7,
+  madmanCount: 0,
+});
+
+function tutorialRoom() {
+  return {
+    code: "TUTORIAL",
+    status: "playing",
+    isHost: true,
+    isAdmin: false,
+    playerCount: 7,
+    wolfCount: 1,
+    madmanCount: 0,
+    players: [{ name: "あなた", connected: true, isHost: true }],
+    includeIdentityFunction: true,
+    requireAttackFunctionGuess: true,
+    anonymousVoting: false,
+    revealConditionOnAttackFailure: false,
+    infectedWolfObservationAlwaysNonWolf: false,
+    limitInvestigatorsPerTarget: false,
+    maxInvestigatorsPerTarget: 7,
+    soloHumanRole: "random",
+  };
+}
+
 export function createTutorial({ state, views, render }) {
   function buildCitizenTutorialGame() {
     return {
       round: 1, phase: "tutorial", omegaLabel: "W(x) = 2x²", myPlayerId: "p0", pendingCount: 0, submitted: false,
+      playerCount: 7, wolfCount: 1, madmanCount: 0, rules: TUTORIAL_RULES, voteRound: 1, voteResult: null,
       reports: [], activePlayerName: null, isHost: true, omega: { label: "W(x) = 2x²" }, outcome: null,
       players: [
         { id: "p0", name: "あなた", human: true, alive: true, role: "citizen", baseFunction: { label: "f(x) = x + 1" }, condition: { label: "x = 2 で符号を見る", targetSign: "positive" } },
@@ -28,6 +61,7 @@ export function createTutorial({ state, views, render }) {
   function buildWolfTutorialGame() {
     return {
       round: 1, phase: "tutorial", omegaLabel: "W(x) = 2x²", myPlayerId: "p0", pendingCount: 0, submitted: false,
+      playerCount: 7, wolfCount: 1, madmanCount: 0, rules: TUTORIAL_RULES, voteRound: 1, voteResult: null,
       reports: [], activePlayerName: null, isHost: true, omega: { label: "W(x) = 2x²" }, outcome: null,
       players: [
         { id: "p0", name: "あなた", human: true, alive: true, role: "wolf", baseFunction: { label: "f(x) = W(x)" }, condition: { label: "x = 3 で符号を見る", targetSign: "negative" } },
@@ -46,70 +80,98 @@ export function createTutorial({ state, views, render }) {
     const role = state.tutorialRole ?? "citizen";
     state.tutorialStep = role === "wolf" ? "wolf-intro" : "intro";
     state.game = role === "wolf" ? buildWolfTutorialGame() : buildCitizenTutorialGame();
+    state.room = tutorialRoom();
+    state.myRole = role;
+    state.myFunction = state.game.players[0].baseFunction;
+    state.myCondition = state.game.players[0].condition;
+    state.observation = null;
+    state.exileReveal = null;
+    state.attackResult = null;
+    state.targetSignChoice = null;
+    state.reportedSignChoice = null;
+    state.publishTargetId = null;
   }
 
-  function tutorialStyle() { return `<style>.highlight-btn{box-shadow:0 0 10px 4px rgba(255,215,0,.8)!important;border-color:#ffd700!important;position:relative;z-index:10;animation:pulse-glow 1.5s infinite}@keyframes pulse-glow{0%{box-shadow:0 0 10px 4px rgba(255,215,0,.8)}50%{box-shadow:0 0 20px 8px rgba(255,215,0,.4)}100%{box-shadow:0 0 10px 4px rgba(255,215,0,.8)}}.disabled-target{opacity:.3!important;pointer-events:none!important}.chat-container{background:#1e1e1e;border:1px solid #444;padding:12px;border-radius:6px;margin:16px 0;color:#eee}.chat-message{margin-bottom:10px;font-size:14px;line-height:1.5}.chat-message strong{color:#ffb74d}</style>`; }
+  function tutorialStyle() { return `<style>.highlight-btn{box-shadow:0 0 10px 4px rgba(255,215,0,.8)!important;border-color:#ffd700!important;position:relative;z-index:10;animation:pulse-glow 1.5s infinite}@keyframes pulse-glow{0%{box-shadow:0 0 10px 4px rgba(255,215,0,.8)}50%{box-shadow:0 0 20px 8px rgba(255,215,0,.4)}100%{box-shadow:0 0 10px 4px rgba(255,215,0,.8)}}.disabled-target{opacity:.3!important;pointer-events:none!important}.tutorial-note{border-left:3px solid #ffb74d;padding:10px 12px;margin:14px 0;background:rgba(255,183,77,.08);line-height:1.6}.tutorial-report{margin-top:16px}</style>`; }
+
+  function tutorialReport(round, observerName, targetName, targetSign = "+", reportedSign = "+") {
+    return `<div class="report tutorial-report"><div class="report-head"><span>ROUND ${round} · ${observerName} → ${targetName}</span><span>REPORT</span></div><div class="report-formula">目標符号は${targetSign}、発表された合成符号は${reportedSign}です。</div><div class="message-gloss">「目標符号は ${targetSign}、私の合成演算の符号は ${reportedSign} だった」</div></div>`;
+  }
+
+  function tutorialTally(rows) {
+    const total = rows.reduce((sum, row) => sum + row[1], 0);
+    return `<div class="tally">${rows.map(([name, count]) => `<div class="tally-row"><span>${name}</span><div class="tally-bar"><div class="tally-fill" style="width:${total ? count / total * 100 : 0}%"></div></div><b>${count}</b></div>`).join("")}</div>`;
+  }
+
+  function tutorialActionButton(id, label) {
+    return `<button class="primary-button highlight-btn" id="${id}">${label}</button>`;
+  }
 
   function tutorialMainContent() {
     const step = state.tutorialStep;
     const alivePlayers = state.game.alivePlayers().filter((p) => p.id !== "p0");
-    if (step === "intro") return `<div class="action-card"><span class="private-role">TUTORIAL</span><h3>関数人狼へようこそ</h3><p>このゲームでは、全員に秘密の「関数」が配られます。他人の関数を調査し、会話と推理で人狼を探し出しましょう。</p><div class="condition-box"><div class="condition-label">勝利条件</div><div class="condition-value" style="font-size:14px;text-align:left;padding:12px;line-height:1.6"><b>市民陣営：</b>人狼（人狼関数Wを持つ人）を投票で追放すれば勝利<br><b>人狼陣営：</b>人狼と「夜に感染した市民」の合計が生存者の過半数になれば勝利</div></div><div class="condition-box"><div class="condition-label">関数の合成と符号の調査とは？</div><div class="condition-value" style="font-size:14px;text-align:left;padding:12px;line-height:1.6"><b>関数の合成：</b>相手の関数に自分の関数を代入すること。<br><span style="font-size:12px;color:#aaa">（例：自分が f(x)=2x、相手が g(x)=x+1 なら、f(g(x))=2(x+1) を計算）</span><br><br><b>符号の調査：</b>合成した関数に特定の値を代入し、計算結果の「符号（プラスかマイナスか）」だけを調べること。</div></div><div class="action-buttons"><button class="primary-button highlight-btn" id="tut-start-investigation">調査を始める</button></div></div>`;
+    if (step === "intro") return `<div class="action-card"><span class="private-role">TUTORIAL</span><h3>関数人狼へようこそ</h3><p>通常のゲームと同じく、左側には公開されている人狼関数 W と参加者一覧、右側には進行ルールが表示されます。あなたの関数と代入条件は常に自分だけに表示されます。</p><div class="condition-box"><div class="condition-label">勝利条件</div><div class="condition-value" style="font-size:14px;text-align:left;padding:12px;line-height:1.6"><b>市民陣営：</b>人狼（人狼関数Wを持つ人）を投票で追放すれば勝利<br><b>人狼陣営：</b>人狼と夜に感染した市民の合計が生存者の過半数になれば勝利</div></div><div class="condition-box"><div class="condition-label">今回の観測</div><div class="condition-value" style="font-size:14px;text-align:left;padding:12px;line-height:1.6"><b>合成：</b>自分の関数を外側、相手の関数を内側にして計算します。<br><b>判定：</b>自分の代入条件に入力し、結果の符号（＋・−・0）を目標符号と比較します。1人の結果だけで人狼を断定しないのがポイントです。</div></div><div class="tutorial-note">画面の下部に表示される案内に従い、光っているボタンを選択してください。</div><div class="action-buttons">${tutorialActionButton("tut-start-investigation", "調査を始める")}</div></div>`;
     if (step === "day1-investigate" || step === "day2-investigate") {
       const targetId = step === "day1-investigate" ? "p3" : "p2";
       const targetName = step === "day1-investigate" ? "ミナト" : "レン";
-      return `<div class="action-card"><span class="private-role">市民</span><h3>あなたの秘密観測</h3><p>調査したい相手を選んでください。（チュートリアルでは <b>${targetName}</b> を選択します）</p><div class="target-grid function-targets">${alivePlayers.map((p) => `<button class="target-button ${p.id === targetId ? "highlight-btn" : "disabled-target"}" data-tut-target="${p.id}">${p.name}<span class="function-mini">F${p.id.slice(1)}(x) = ?</span></button>`).join("")}</div></div>`;
+      return `<div class="action-card"><span class="private-role">市民</span><h3>あなたの秘密観測</h3><p>自分の関数を外側、指名相手の関数を内側として合成します。チュートリアルでは <b>${targetName}</b> を選択します。</p><div class="condition-box"><div class="condition-label">YOUR PRIVATE FUNCTION</div><div class="condition-value">f(x) = x + 1</div><div class="function-vector">[ 1 2 3 4 5 6 7 ]</div></div><div class="condition-box"><div class="condition-label">YOUR TEST</div><div class="condition-value">x = 2 で合成値の符号を見る<br>目標符号：＋</div></div><div class="target-grid function-targets">${alivePlayers.map((p) => `<button class="target-button ${p.id === targetId ? "highlight-btn" : "disabled-target"}" data-tut-target="${p.id}">${p.name}<span class="function-mini">秘密関数</span></button>`).join("")}</div></div>`;
     }
     if (step === "day1-observation" || step === "day2-observation") {
       const targetName = step === "day1-observation" ? "ミナト" : "レン";
-      return `<div class="action-card"><span class="private-role">PRIVATE RESULT</span><h3>${targetName}の合成演算</h3><p>計算結果の符号が出ました。結果を村に公開しましょう。</p><div class="result-value">符号は＋です</div><div class="action-buttons"><button class="primary-button highlight-btn" data-tut-pub="yes">符号を公開する</button><button class="secondary-button disabled-target">結果を伏せる</button></div></div>`;
+      return `<div class="action-card"><span class="private-role">PRIVATE RESULT</span><h3>${targetName}の合成演算</h3><p>観測結果を確認しました。市民は目標符号と観測符号をそのまま公開します。</p><div class="condition-box"><div class="condition-label">Fself ∘ Ftarget</div><div class="condition-value">x = 2 で合成値の符号を見る</div></div><div class="result-value">符号は＋です</div><div class="condition-box"><div class="condition-label">TARGET SIGN</div><div class="condition-value">目標符号は＋です。</div></div><div class="action-buttons"><button class="primary-button highlight-btn" data-tut-pub="yes">符号を公開する</button><button class="secondary-button disabled-target">結果を伏せる</button></div></div>`;
     }
     if (step === "day1-discussion" || step === "day2-discussion") {
       const day1 = step === "day1-discussion";
-      const chats = day1 ? `<div class="chat-message"><strong>アオイ:</strong> 私の計算だとマイナスだった。ミナトの符号が合わないな。</div><div class="chat-message"><strong>カイ:</strong> 私もミナトが偽装しているように見えます。</div><div class="chat-message"><strong>スズ:</strong> 確かにミナトが怪しいですね。投票しましょう。</div>` : `<div class="chat-message"><strong>ユイ:</strong> レンの関数が W の条件に完全に一致している！</div><div class="chat-message"><strong>カイ:</strong> W(x) を持っているのはレンで確定だ！</div><div class="chat-message"><strong>アオイ:</strong> レンが人狼ですね。彼を追放しましょう！</div>`;
+      const reports = day1
+        ? `${tutorialReport(1, "あなた", "ミナト", "+", "+")}${tutorialReport(1, "アオイ", "ミナト", "−", "−")}`
+        : `${tutorialReport(2, "あなた", "レン", "+", "+")}${tutorialReport(2, "ユイ", "レン", "+", "+")}`;
       const targetName = day1 ? "ミナト" : "レン";
-      return `<div class="round-intro"><div class="panel-kicker">Shared observations</div><h2>符号の公開と議論</h2><div class="chat-container">${chats}</div><p style="color:#ff4d4d;font-weight:bold">${targetName}が怪しいようです。追放投票を行いましょう。</p></div><div class="action-buttons"><button class="primary-button highlight-btn" id="tut-go-vote">追放投票へ</button></div>`;
+      return `<div class="round-intro"><div class="panel-kicker">Shared observations</div><h2>符号の公開と議論</h2><p>現在の画面では、公開された観測結果がこの形式で並びます。目標符号と発表符号を複数人分組み合わせて判断します。</p><div class="reports">${reports}</div><p class="tutorial-note"><b>${targetName}</b>が怪しいという議論になりました。1人の結果だけで決めつけず、投票へ進みます。</p></div><div class="action-buttons">${tutorialActionButton("tut-go-vote", "追放投票へ")}</div>`;
     }
     if (step === "day1-vote" || step === "day2-vote") {
       const targetId = step === "day1-vote" ? "p3" : "p2";
       const targetName = step === "day1-vote" ? "ミナト" : "レン";
-      return `<div class="action-card"><span class="private-role">市民</span><h3>あなたの投票</h3><p>議論をもとに、<b>${targetName}</b> に投票してください。</p><div class="target-grid function-targets">${alivePlayers.map((p) => `<button class="target-button ${p.id === targetId ? "highlight-btn" : "disabled-target"}" data-tut-vote="${p.id}">${p.name}</button>`).join("")}</div></div>`;
+      return `<div class="action-card"><span class="private-role">市民</span><h3>あなたの投票</h3><p>議論をもとに、<b>${targetName}</b> に投票してください。実際の画面では追放しない選択肢もあります。</p><div class="target-grid function-targets">${alivePlayers.map((p) => `<button class="target-button ${p.id === targetId ? "highlight-btn" : "disabled-target"}" data-tut-vote="${p.id}">${p.name}</button>`).join("")}<button class="target-button disabled-target">∅ 追放しない</button></div></div>`;
     }
     if (step === "day1-voteresult" || step === "day2-voteresult") {
       const day1 = step === "day1-voteresult";
       const targetName = day1 ? "ミナト" : "レン";
       const roleName = day1 ? "市民" : "人狼";
       const nextBtnId = day1 ? "tut-go-night" : "tut-finish";
-      return `<div class="action-card"><span class="private-role">VOTE RESULT</span><h3>投票結果</h3><p>投票の結果、${targetName}が追放されました。彼は「<b>${roleName}</b>」でした。</p><div class="action-buttons"><button class="primary-button highlight-btn" id="${nextBtnId}">${day1 ? "夜へ進む" : "チュートリアルを終了する"}</button></div></div>`;
+      const tally = day1 ? tutorialTally([["ミナト", 4], ["レン", 2], ["追放しない", 1]]) : tutorialTally([["レン", 6], ["追放しない", 1]]);
+      return `<div class="action-card"><span class="private-role">VOTE RESULT</span><h3>投票結果</h3><p>投票の結果、${targetName}が追放されました。彼は「<b>${roleName}</b>」でした。</p>${tally}<div class="vote-details"><div class="condition-label">個別投票</div><div class="vote-detail-row"><span>あなた</span><span>→</span><b>${targetName}</b></div><div class="vote-detail-row"><span>CPU</span><span>→</span><b>${targetName}</b></div></div><div class="action-buttons">${tutorialActionButton(nextBtnId, day1 ? "夜へ進む" : "チュートリアルを終了する")}</div></div>`;
     }
-    if (step === "day2-nightresult") return `<div class="action-card"><span class="private-role">SECRET COMPOSITION</span><h3>夜が明けた</h3><p>夜の間に誰かの関数が感染したかもしれません。再び調査を始めましょう。</p><div class="action-buttons"><button class="primary-button highlight-btn" id="tut-next-round">ROUND 2へ</button></div></div>`;
+    if (step === "day2-nightresult") return `<div class="action-card"><span class="private-role">SECRET COMPOSITION</span><h3>夜が明けた</h3><p>人狼の襲撃処理が完了しました。対象者自身には変化が分かりません。市民側は次の調査へ進みます。</p><div class="condition-box"><div class="condition-label">NIGHT RESULT</div><div class="condition-value">今回の襲撃：結果は非公開（市民には成功・失敗を通知しません）</div></div><div class="result-value">Fᵢ′ = W ∘ Fᵢ（秘密裏に処理）</div><div class="action-buttons">${tutorialActionButton("tut-next-round", "ROUND 2へ")}</div></div>`;
 
     // ここから人狼視点チュートリアル
-    if (step === "wolf-intro") return `<div class="action-card"><span class="private-role">TUTORIAL</span><h3>人狼視点のチュートリアル</h3><p>あなたは人狼関数 W を持つ「元の人狼」です。市民に紛れて生き残りながら、夜ごとに市民の関数を推測し、的中させて感染を広げましょう。</p><div class="condition-box"><div class="condition-label">勝利条件</div><div class="condition-value" style="font-size:14px;text-align:left;padding:12px;line-height:1.6"><b>市民陣営：</b>人狼（人狼関数Wを持つ人）を投票で追放すれば勝利<br><b>人狼陣営：</b>人狼と「夜に感染した市民」の合計が生存者の過半数になれば勝利</div></div><div class="condition-box"><div class="condition-label">人狼としての立ち回り</div><div class="condition-value" style="font-size:14px;text-align:left;padding:12px;line-height:1.6"><b>昼：</b>市民と同じように調査・符号公開・議論・投票に参加し、疑われないよう振る舞います。<br><b>夜：</b>市民を1人選んで関数の種類を推測します。的中すれば、対象にWを秘密裏に合成（感染）できます。誰がどの関数を持つかは分からないため、推測は運とかまかけが必要です。</div></div><div class="action-buttons"><button class="primary-button highlight-btn" id="tut-wolf-start-investigation">調査を始める</button></div></div>`;
+    if (step === "wolf-intro") return `<div class="action-card"><span class="private-role">TUTORIAL</span><h3>人狼視点のチュートリアル</h3><p>あなたは人狼関数 W を持つ「元の人狼」です。通常画面と同じく、昼は市民と同じ調査・公開・投票を行い、夜だけ襲撃操作が表示されます。</p><div class="condition-box"><div class="condition-label">勝利条件</div><div class="condition-value" style="font-size:14px;text-align:left;padding:12px;line-height:1.6"><b>市民陣営：</b>人狼（人狼関数Wを持つ人）を投票で追放すれば勝利<br><b>人狼陣営：</b>人狼と夜に感染した市民の合計が生存者の過半数になれば勝利</div></div><div class="condition-box"><div class="condition-label">夜の襲撃</div><div class="condition-value" style="font-size:14px;text-align:left;padding:12px;line-height:1.6">対象を選んだ後、相手の関数種類を推測します。関数の一覧は見えますが、誰がどの関数かは分かりません。推測が的中すると W ∘ F が秘密裏に成立します。</div></div><div class="tutorial-note">人狼専用情報は左側の W と関数一覧、公開結果とは別の襲撃結果として表示されます。</div><div class="action-buttons">${tutorialActionButton("tut-wolf-start-investigation", "調査を始める")}</div></div>`;
     if (step === "wolf-day1-investigate" || step === "wolf-day2-investigate") {
       const targetId = step === "wolf-day1-investigate" ? "p3" : "p6";
       const targetName = step === "wolf-day1-investigate" ? "ミナト" : "スズ";
-      return `<div class="action-card"><span class="private-role">元の人狼</span><h3>あなたの秘密観測</h3><p>疑われないよう、市民と同じように調査を行います。（チュートリアルでは <b>${targetName}</b> を選択します）</p><div class="target-grid function-targets">${alivePlayers.map((p) => `<button class="target-button ${p.id === targetId ? "highlight-btn" : "disabled-target"}" data-tut-wolf-target="${p.id}">${p.name}<span class="function-mini">F${p.id.slice(1)}(x) = ?</span></button>`).join("")}</div></div>`;
+      return `<div class="action-card"><span class="private-role">元の人狼</span><h3>あなたの秘密観測</h3><p>疑われないよう、市民と同じように調査します。チュートリアルでは <b>${targetName}</b> を選択します。</p><div class="condition-box"><div class="condition-label">YOUR PRIVATE FUNCTION</div><div class="condition-value">f(x) = W(x)</div><div class="function-vector">[ W(0) W(1) W(2) W(3) W(4) W(5) W(6) ]</div></div><div class="condition-box"><div class="condition-label">YOUR TEST</div><div class="condition-value">x = 3 で合成値の符号を見る<br>目標符号：−</div></div><div class="target-grid function-targets">${alivePlayers.map((p) => `<button class="target-button ${p.id === targetId ? "highlight-btn" : "disabled-target"}" data-tut-wolf-target="${p.id}">${p.name}<span class="function-mini">秘密関数</span></button>`).join("")}</div></div>`;
     }
     if (step === "wolf-day1-observation" || step === "wolf-day2-observation") {
       const targetName = step === "wolf-day1-observation" ? "ミナト" : "スズ";
-      return `<div class="action-card"><span class="private-role">PRIVATE RESULT</span><h3>${targetName}の合成演算</h3><p>計算結果の符号が出ました。市民と同じように結果を村に公開し、違和感を与えないようにしましょう。</p><div class="result-value">符号は－です</div><div class="action-buttons"><button class="primary-button highlight-btn" data-tut-wolf-pub="yes">符号を公開する</button><button class="secondary-button disabled-target">結果を伏せる</button></div></div>`;
+      return `<div class="action-card"><span class="private-role">PRIVATE RESULT</span><h3>${targetName}の合成演算</h3><p>観測結果を確認しました。人狼も市民と同じ公開画面を使いますが、目標符号や公表対象を変更できます。</p><div class="condition-box"><div class="condition-label">Fself ∘ Ftarget</div><div class="condition-value">x = 3 で合成値の符号を見る</div></div><div class="result-value">符号は−です</div><div class="condition-box"><div class="condition-label">TARGET SIGN TO ANNOUNCE</div><div class="condition-value">公開する目標符号を選択できます。</div><div class="target-grid sign-targets"><button class="target-button selected disabled-target">＋<span class="function-mini">positive</span></button><button class="target-button disabled-target">−<span class="function-mini">negative</span></button><button class="target-button disabled-target">0<span class="function-mini">zero</span></button></div></div><div class="condition-box"><div class="condition-label">TARGET TO ANNOUNCE</div><div class="condition-value">実際に観測した相手とは別の公表対象も選べます。</div><div class="target-grid function-targets"><button class="target-button selected disabled-target">${targetName}<span class="function-mini">公表対象</span></button></div></div><div class="action-buttons"><button class="primary-button highlight-btn" data-tut-wolf-pub="yes">選んだ符号を公開する</button><button class="secondary-button disabled-target">結果を伏せる</button></div></div>`;
     }
     if (step === "wolf-day1-discussion" || step === "wolf-day2-discussion") {
       const day1 = step === "wolf-day1-discussion";
-      const chats = day1 ? `<div class="chat-message"><strong>アオイ:</strong> ミナトの符号がずっと噛み合わない気がします。</div><div class="chat-message"><strong>ユイ:</strong> 私もそう思います。ミナトが怪しいですね。</div><div class="chat-message"><strong>カイ:</strong> 投票しましょう。</div>` : `<div class="chat-message"><strong>アオイ:</strong> スズの報告が他の人と矛盾しています。</div><div class="chat-message"><strong>ミナト:</strong> スズが人狼っぽいですね…あなたはどう思いますか？</div><div class="chat-message"><strong>ユイ:</strong> 私もスズを疑っています。</div>`;
+      const reports = day1
+        ? `${tutorialReport(1, "あなた", "ミナト", "−", "−")}${tutorialReport(1, "ユイ", "ミナト", "+", "+")}`
+        : `${tutorialReport(2, "あなた", "スズ", "−", "−")}${tutorialReport(2, "ミナト", "スズ", "+", "−")}`;
       const targetName = day1 ? "ミナト" : "スズ";
       const wolfNote = day1 ? "まだあなたは疑われていません。多数派に合わせて投票し、怪しまれないようにしましょう。" : "あなたも少し話題に上がりましたが、決定打はないようです。今のうちに多数派へ合わせましょう。";
-      return `<div class="round-intro"><div class="panel-kicker">Shared observations</div><h2>符号の公開と議論</h2><div class="chat-container">${chats}</div><p style="color:#ffb74d;font-weight:bold">${wolfNote}</p><p style="color:#ff4d4d;font-weight:bold">${targetName}が怪しいようです。追放投票を行いましょう。</p></div><div class="action-buttons"><button class="primary-button highlight-btn" id="tut-wolf-go-vote">追放投票へ</button></div>`;
+      return `<div class="round-intro"><div class="panel-kicker">Shared observations</div><h2>符号の公開と議論</h2><p>実際の画面では、CPUの公開結果も同じレポート形式で表示されます。</p><div class="reports">${reports}</div><p class="tutorial-note">${wolfNote}</p><p class="tutorial-note"><b>${targetName}</b>が怪しいようです。追放投票へ進みます。</p></div><div class="action-buttons">${tutorialActionButton("tut-wolf-go-vote", "追放投票へ")}</div>`;
     }
     if (step === "wolf-day1-vote" || step === "wolf-day2-vote") {
       const targetId = step === "wolf-day1-vote" ? "p3" : "p6";
       const targetName = step === "wolf-day1-vote" ? "ミナト" : "スズ";
-      return `<div class="action-card"><span class="private-role">元の人狼</span><h3>あなたの投票</h3><p>正体を隠すため、多数派と同じ <b>${targetName}</b> に投票してください。</p><div class="target-grid function-targets">${alivePlayers.map((p) => `<button class="target-button ${p.id === targetId ? "highlight-btn" : "disabled-target"}" data-tut-wolf-vote="${p.id}">${p.name}</button>`).join("")}</div></div>`;
+      return `<div class="action-card"><span class="private-role">元の人狼</span><h3>あなたの投票</h3><p>正体を隠すため、多数派と同じ <b>${targetName}</b> に投票してください。実際の画面では「追放しない」も選択できます。</p><div class="target-grid function-targets">${alivePlayers.map((p) => `<button class="target-button ${p.id === targetId ? "highlight-btn" : "disabled-target"}" data-tut-wolf-vote="${p.id}">${p.name}</button>`).join("")}<button class="target-button disabled-target">∅ 追放しない</button></div></div>`;
     }
     if (step === "wolf-day1-voteresult" || step === "wolf-day2-voteresult") {
       const day1 = step === "wolf-day1-voteresult";
       const targetName = day1 ? "ミナト" : "スズ";
-      return `<div class="action-card"><span class="private-role">VOTE RESULT</span><h3>投票結果</h3><p>投票の結果、${targetName}が追放されました。彼(彼女)は「<b>市民</b>」でした。あなたは無事に切り抜けました。</p><div class="action-buttons"><button class="primary-button highlight-btn" id="tut-wolf-go-night">夜の襲撃へ</button></div></div>`;
+      return `<div class="action-card"><span class="private-role">VOTE RESULT</span><h3>投票結果</h3><p>投票の結果、${targetName}が追放されました。彼(彼女)は「<b>市民</b>」でした。あなたは無事に切り抜けました。</p>${tutorialTally([[targetName, 4], ["あなた", 1], ["追放しない", 2]])}<div class="vote-details"><div class="condition-label">個別投票</div><div class="vote-detail-row"><span>あなた</span><span>→</span><b>${targetName}</b></div><div class="vote-detail-row"><span>CPU</span><span>→</span><b>${targetName}</b></div></div><div class="action-buttons">${tutorialActionButton("tut-wolf-go-night", "夜の襲撃へ")}</div></div>`;
     }
     if (step === "wolf-day1-night-target" || step === "wolf-day2-night-target") {
       const targetId = step === "wolf-day1-night-target" ? "p4" : "p1";
@@ -120,10 +182,10 @@ export function createTutorial({ state, views, render }) {
       const day1 = step === "wolf-day1-night-guess";
       const targetName = day1 ? "ユイ" : "アオイ";
       const correctId = day1 ? "fn-x2" : "fn-2x";
-      return `<div class="action-card"><span class="private-role">元の人狼</span><h3>${targetName}の関数を推測</h3><p>この推測が的中した場合だけ、対象の関数にWが合成されます。（チュートリアルでは正解の選択肢を選びます）</p><div class="condition-box"><div class="condition-label">SELECTED TARGET</div><div class="condition-value">${targetName}</div></div><div class="target-grid function-targets">${WOLF_FUNCTION_OPTIONS.map((option) => `<button class="target-button ${option.id === correctId ? "highlight-btn" : "disabled-target"}" data-tut-wolf-attack-guess="${option.id}">${option.label}</button>`).join("")}</div></div>`;
+      return `<div class="action-card"><span class="private-role">元の人狼</span><h3>${targetName}の関数を推測</h3><p>この推測が的中した場合だけ、対象の関数に W が合成されます。通常画面と同じく、ここから関数を選びます。</p><div class="condition-box"><div class="condition-label">SELECTED TARGET</div><div class="condition-value">${targetName}<br><span class="function-mini">関数は非公開</span></div></div><div class="target-grid function-targets">${WOLF_FUNCTION_OPTIONS.map((option) => `<button class="target-button ${option.id === correctId ? "highlight-btn" : "disabled-target"}" data-tut-wolf-attack-guess="${option.id}">${option.label}</button>`).join("")}</div><div class="action-buttons"><button class="secondary-button disabled-target">人の選択に戻る</button></div></div>`;
     }
-    if (step === "wolf-day1-nightresult") return `<div class="action-card"><span class="private-role">SECRET COMPOSITION</span><h3>夜が明けた</h3><p>推測が的中し、ユイの関数にWが秘密裏に合成されました。本人にも他のプレイヤーにも気づかれません。</p><div class="result-value">Fᵢ′ = W ∘ Fᵢ（感染成功）</div><div class="action-buttons"><button class="primary-button highlight-btn" id="tut-wolf-next-round">ROUND 2へ</button></div></div>`;
-    if (step === "wolf-day2-nightresult") return `<div class="action-card"><span class="private-role">SECRET COMPOSITION</span><h3>夜が明けた</h3><p>推測が的中し、アオイの関数にもWが秘密裏に合成されました。人狼と感染した市民を合わせると、生存者の過半数に達しています。</p><div class="result-value">Fᵢ′ = W ∘ Fᵢ（感染成功）</div><div class="action-buttons"><button class="primary-button highlight-btn" id="tut-wolf-finish">結果を確認する</button></div></div>`;
+    if (step === "wolf-day1-nightresult") return `<div class="action-card"><span class="private-role">SECRET COMPOSITION</span><h3>夜が明けた</h3><p>推測が的中し、ユイの関数に W が秘密裏に合成されました。本人にも他のプレイヤーにも気づかれません。</p><div class="condition-box"><div class="condition-label">YOUR ATTACK RESULT</div><div class="condition-value">成功：関数の推測が的中しました。</div></div><div class="result-value">Fᵢ′ = W ∘ Fᵢ（感染成功）</div><div class="action-buttons">${tutorialActionButton("tut-wolf-next-round", "ROUND 2へ")}</div></div>`;
+    if (step === "wolf-day2-nightresult") return `<div class="action-card"><span class="private-role">SECRET COMPOSITION</span><h3>夜が明けた</h3><p>推測が的中し、アオイの関数にも W が秘密裏に合成されました。人狼と感染した市民を合わせると生存者の過半数に達します。</p><div class="condition-box"><div class="condition-label">YOUR ATTACK RESULT</div><div class="condition-value">成功：関数の推測が的中しました。</div></div><div class="result-value">Fᵢ′ = W ∘ Fᵢ（感染成功）</div><div class="action-buttons">${tutorialActionButton("tut-wolf-finish", "結果を確認する")}</div></div>`;
     return "";
   }
 
@@ -169,7 +231,7 @@ export function createTutorial({ state, views, render }) {
   }
 
   function tutorialBoard() {
-    return `<div class="shell">${views.header()}<div class="function-board">${views.leftPanel()}<main class="panel function-main"><div class="panel-head discussion-head"><div><div class="panel-kicker">Tutorial</div><div class="panel-title">ROUND ${state.game.round}</div></div><div class="phase-badge">TUTORIAL</div></div><div class="function-main-body">${tutorialMainContent()}</div></main>${views.rightPanel()}</div></div>`;
+    return `<div class="shell">${views.header()}<div class="function-board">${views.leftPanel()}<main class="panel function-main"><div class="panel-head discussion-head"><div><div class="panel-kicker">Function village · ROOM TUTORIAL</div><div class="panel-title">ROUND ${state.game.round}</div></div><div class="phase-badge">TUTORIAL</div></div><div class="function-main-body">${tutorialMainContent()}</div></main>${views.rightPanel()}</div></div>`;
   }
 
   function bindEvents() {
