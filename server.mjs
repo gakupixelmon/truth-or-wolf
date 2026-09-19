@@ -212,6 +212,7 @@ function gameState(room, socketId) {
       : false;
   const activePlayer = game && room.activePlayerId ? getPlayer(room, room.activePlayerId) : null;
   return {
+    revision: room.gameStateRevision ?? 0,
     roomCode: room.code,
     phase: room.phase,
     round: game.round,
@@ -246,6 +247,7 @@ function gameState(room, socketId) {
 function roomState(room, socketId) {
   const member = getMember(room, socketId);
   return {
+    revision: room.stateRevision ?? 0,
     code: room.code,
     // パスワードは部屋作成者本人にだけ返す。
     password: member?.socketId === room.hostSocketId ? room.password : null,
@@ -267,6 +269,7 @@ function roomState(room, socketId) {
 }
 
 function sendRoomState(room) {
+  room.stateRevision = (room.stateRevision ?? 0) + 1;
   for (const member of room.members) {
     io.to(member.socketId).emit("room:update", roomState(room, member.socketId));
   }
@@ -278,6 +281,7 @@ function sendRoomSession(socket, room, member) {
 
 function sendGameState(room) {
   if (!room.game) return;
+  room.gameStateRevision = (room.gameStateRevision ?? 0) + 1;
   for (const member of room.members) {
     io.to(member.socketId).emit("game:state", gameState(room, member.socketId));
   }
@@ -285,6 +289,17 @@ function sendGameState(room) {
 
 function sendError(socket, message) {
   socket.emit("room:error", { message });
+}
+
+function sendCurrentRoomState(room) {
+  // モバイルのバックグラウンド復帰・再接続時は、公開状態と本人だけの状態を同じ順序で再送する。
+  sendRoomState(room);
+  if (!room.game) return;
+  sendGameState(room);
+  sendHumanIdentities(room);
+  if (room.phase === "investigation") sendInvestigationTurns(room);
+  if (room.phase === "vote") sendVoteTurns(room);
+  if (room.phase === "night" && room.activePlayerId) sendNightTurn(room);
 }
 
 function privatePlayerData(room, playerId) {
@@ -311,12 +326,43 @@ function privatePlayerData(room, playerId) {
   return privateData;
 }
 
+function sendHumanIdentities(room) {
+  for (const player of room.game.players.filter((candidate) => candidate.human)) {
+    const member = room.members.find((entry) => entry.playerId === player.id);
+    if (!member) continue;
+    io.to(member.socketId).emit("game:identity", {
+      revision: room.gameStateRevision ?? 0,
+      ...privatePlayerData(room, player.id),
+    });
+  }
+}
+
+function sendObservation(room, playerId) {
+  const report = room.investigationReports.get(playerId);
+  if (!report) return false;
+  const member = room.members.find((entry) => entry.playerId === playerId);
+  if (!member) return false;
+  io.to(member.socketId).emit("game:observation", {
+    revision: room.gameStateRevision ?? 0,
+    target: { id: report.target.id, name: report.target.name },
+    condition: { label: report.condition.label, targetSign: report.targetSign },
+    observed: report.observed,
+    targetSign: report.targetSign,
+    isMatch: report.isMatch,
+    reportedSign: report.reportedSign,
+    truthful: true,
+  });
+  return true;
+}
+
 function sendInvestigationTurns(room) {
   for (const player of room.game.getHumanActors().filter((candidate) => candidate.alive)) {
     if (!room.investigationPending.has(player.id)) continue;
     const member = room.members.find((entry) => entry.playerId === player.id);
     if (!member) continue;
+    if (sendObservation(room, player.id)) continue;
     io.to(member.socketId).emit("game:private", {
+      revision: room.gameStateRevision ?? 0,
       kind: "investigation",
       ...privatePlayerData(room, player.id),
       targets: room.game.alivePlayers()
@@ -333,6 +379,7 @@ function sendVoteTurns(room) {
     const member = room.members.find((entry) => entry.playerId === player.id);
     if (!member) continue;
     io.to(member.socketId).emit("game:private", {
+      revision: room.gameStateRevision ?? 0,
       kind: "vote",
       ...privatePlayerData(room, player.id),
       voteRound: room.voteRound ?? 1,
@@ -386,6 +433,7 @@ function sendNightTurn(room) {
   const member = room.members.find((entry) => entry.playerId === player?.id);
   if (!player || !member) return;
   io.to(member.socketId).emit("game:private", {
+    revision: room.gameStateRevision ?? 0,
     kind: "night",
     playerId: player.id,
     name: player.name,
@@ -613,6 +661,8 @@ io.on("connection", (socket) => {
       voteSubmitted: new Set(),
       voteRound: 1,
       voteCandidates: null,
+      stateRevision: 0,
+      gameStateRevision: 0,
     };
     rooms.set(room.code, room);
     socket.join(room.code);
@@ -640,13 +690,13 @@ io.on("connection", (socket) => {
     socket.join(room.code);
     socket.data.roomCode = room.code;
     sendRoomSession(socket, room, member);
-    sendRoomState(room);
-    if (room.game) {
-      sendGameState(room);
-      if (room.phase === "investigation") sendInvestigationTurns(room);
-      if (room.phase === "vote") sendVoteTurns(room);
-      if (room.phase === "night" && room.activePlayerId === member.playerId) sendNightTurn(room);
-    }
+    sendCurrentRoomState(room);
+  });
+
+  socket.on("room:sync", () => {
+    const room = getRoom(socket);
+    if (!room) return;
+    sendCurrentRoomState(room);
   });
 
   socket.on("room:join", ({ code, name, password } = {}) => {
@@ -765,15 +815,7 @@ io.on("connection", (socket) => {
       const report = room.game.investigate(playerId, targetId);
       room.investigationReports.set(playerId, report);
       sendMadmanTruth(room, report);
-      socket.emit("game:observation", {
-        target: { id: report.target.id, name: report.target.name },
-        condition: { label: report.condition.label, targetSign: report.targetSign },
-        observed: report.observed,
-        targetSign: report.targetSign,
-        isMatch: report.isMatch,
-        reportedSign: report.reportedSign,
-        truthful: true,
-      });
+      sendObservation(room, playerId);
     } catch (error) {
       if (error?.message === "Investigation target is full" && room.game.rules.limitInvestigatorsPerTarget) {
         const hasAlternative = room.game.alivePlayers().some((target) => {

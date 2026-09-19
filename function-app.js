@@ -29,6 +29,8 @@ const state = {
   tutorialRole: null,
   tutorialStep: "",
   error: null,
+  roomRevision: 0,
+  gameRevision: 0,
 };
 
 

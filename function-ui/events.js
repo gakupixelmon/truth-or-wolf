@@ -29,6 +29,18 @@ function clearRoomSession() {
   }
 }
 
+function requestRoomSync(socket) {
+  if (!socket.connected || !loadRoomSession()) return;
+  socket.emit("room:sync");
+}
+
+function acceptGameRevision(state, payload) {
+  if (!Number.isInteger(payload?.revision)) return true;
+  if (payload.revision < state.gameRevision) return false;
+  state.gameRevision = payload.revision;
+  return true;
+}
+
 async function copyToClipboard(value) {
   if (navigator.clipboard?.writeText) {
     await navigator.clipboard.writeText(value);
@@ -125,7 +137,7 @@ export function bindEvents({ state, socket, render }) {
     event.preventDefault(); state.error = null; socket.emit("room:join", formValues(event.currentTarget));
   });
   document.querySelector("#leave-room")?.addEventListener("click", () => {
-    clearRoomSession(); socket.emit("room:leave"); state.room = null; state.game = null; state.privateAction = null; state.myFunction = null; state.myCondition = null; state.myRole = null; state.wolfFunctionOptions = null; state.showWolfFunctionList = false; state.madmanTruths = []; state.observation = null; state.exileReveal = null; state.attackResult = null; state.nightTargetId = null; state.targetSignChoice = null; state.reportedSignChoice = null; state.publishTargetId = null; render();
+    clearRoomSession(); socket.emit("room:leave"); state.room = null; state.game = null; state.roomRevision = 0; state.gameRevision = 0; state.privateAction = null; state.myFunction = null; state.myCondition = null; state.myRole = null; state.wolfFunctionOptions = null; state.showWolfFunctionList = false; state.madmanTruths = []; state.observation = null; state.exileReveal = null; state.attackResult = null; state.nightTargetId = null; state.targetSignChoice = null; state.reportedSignChoice = null; state.publishTargetId = null; render();
   });
   document.querySelector("#start-online-game")?.addEventListener("click", () => {
     const settingsForm = document.querySelector("#room-player-count-form");
@@ -222,14 +234,25 @@ export function bindSocketEvents({ state, socket, render }) {
   });
   socket.on("disconnect", () => { state.connected = false; state.error = "サーバーとの接続が切れました。再読み込みしてください。"; render(); });
   socket.on("room:session", (session) => saveRoomSession(session));
-  socket.on("room:resume-failed", ({ message }) => { clearRoomSession(); state.error = message ?? "部屋へ再接続できませんでした。"; render(); });
-  socket.on("room:update", (room) => { state.room = room; if (room.status === "lobby") { state.game = null; state.myFunction = null; state.myCondition = null; state.myRole = null; state.wolfFunctionOptions = null; state.showWolfFunctionList = false; state.madmanTruths = []; state.reportedSignChoice = null; state.publishTargetId = null; } state.error = null; render(); });
+  socket.on("room:resume-failed", ({ message }) => { clearRoomSession(); state.room = null; state.game = null; state.roomRevision = 0; state.gameRevision = 0; state.error = message ?? "部屋へ再接続できませんでした。"; render(); });
+  socket.on("room:update", (room) => {
+    if (Number.isInteger(room.revision) && room.revision < state.roomRevision) return;
+    if (Number.isInteger(room.revision)) state.roomRevision = room.revision;
+    state.room = room;
+    if (room.status === "lobby") { state.game = null; state.gameRevision = 0; state.myFunction = null; state.myCondition = null; state.myRole = null; state.wolfFunctionOptions = null; state.showWolfFunctionList = false; state.madmanTruths = []; state.reportedSignChoice = null; state.publishTargetId = null; }
+    state.error = null;
+    render();
+  });
   socket.on("game:state", (game) => {
+    if (Number.isInteger(game.revision) && game.revision < state.gameRevision) return;
+    if (Number.isInteger(game.revision)) state.gameRevision = game.revision;
     const restarting = state.game?.phase === "ended" && game.phase === "investigation";
     const keepPrivateAction = state.game?.phase === game.phase
       && (state.game?.voteRound ?? 1) === (game.voteRound ?? 1)
       && state.privateAction?.playerId === game.myPlayerId
       && !game.submitted;
+    const keepObservation = Number.isInteger(state.observation?.revision)
+      && state.observation.revision === game.revision;
     state.game = game;
     if (restarting) {
       state.myFunction = null;
@@ -240,10 +263,11 @@ export function bindSocketEvents({ state, socket, render }) {
       state.madmanTruths = [];
       state.publishTargetId = null;
     }
-    if (!keepPrivateAction) { state.privateAction = null; state.observation = null; state.exileReveal = null; state.attackResult = null; state.nightTargetId = null; state.targetSignChoice = null; state.reportedSignChoice = null; state.publishTargetId = null; }
+    if (!keepPrivateAction) { state.privateAction = null; if (!keepObservation) state.observation = null; state.exileReveal = null; state.attackResult = null; state.nightTargetId = null; state.targetSignChoice = null; state.reportedSignChoice = null; state.publishTargetId = null; }
     state.error = null; render();
   });
   socket.on("game:private", (action) => {
+    if (!acceptGameRevision(state, action)) return;
     state.privateAction = action;
     // 自分の関数は届いたタイミングでキャッシュし、投票などその後のフェーズでも左パネルに表示し続ける
     if (action.function) state.myFunction = action.function;
@@ -257,9 +281,23 @@ export function bindSocketEvents({ state, socket, render }) {
     state.publishTargetId = null;
     render();
   });
-  socket.on("game:observation", (observation) => { state.observation = observation; state.targetSignChoice = null; state.reportedSignChoice = null; state.publishTargetId = observation.target?.id ?? null; render(); });
+  socket.on("game:identity", (identity) => {
+    if (!acceptGameRevision(state, identity)) return;
+    if (identity.function) state.myFunction = identity.function;
+    if (identity.condition) state.myCondition = identity.condition;
+    if (identity.role) state.myRole = identity.role;
+    if ((identity.role === "wolf" || identity.role === "madman") && Array.isArray(identity.functionOptions)) state.wolfFunctionOptions = identity.functionOptions;
+    if (identity.role !== "wolf" && identity.role !== "madman") { state.wolfFunctionOptions = null; state.showWolfFunctionList = false; }
+    render();
+  });
+  socket.on("game:observation", (observation) => { if (!acceptGameRevision(state, observation)) return; state.observation = observation; state.targetSignChoice = null; state.reportedSignChoice = null; state.publishTargetId = observation.target?.id ?? null; render(); });
   socket.on("game:madman-truth", (truth) => { state.madmanTruths = [...state.madmanTruths, truth]; render(); });
   socket.on("game:exile-reveal", (reveal) => { state.exileReveal = reveal; render(); });
   socket.on("game:attack-result", (result) => { state.attackResult = result; render(); });
   socket.on("room:error", ({ message }) => { state.error = message; render(); });
+  // スマホが別アプリから復帰したとき、画面をサーバーの最新状態へ合わせる。
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") requestRoomSync(socket);
+  });
+  window.addEventListener("pageshow", () => requestRoomSync(socket));
 }
